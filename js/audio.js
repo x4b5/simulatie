@@ -164,8 +164,9 @@ export class AudioEngine {
     g.connect(an);
     g.connect(panner);
     const ended = new Promise((r) => (src.onended = r));
-    src.start();
-    return { duration: buf.duration, analyser: an, ended, stop: () => { try { src.stop(); } catch (e) { /* al gestopt */ } } };
+    const startTime = ctx.currentTime;
+    src.start(startTime);
+    return { duration: buf.duration, analyser: an, ended, startTime, stop: () => { try { src.stop(); } catch (e) { /* al gestopt */ } } };
   }
 
   level(an) {

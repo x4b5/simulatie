@@ -14,6 +14,7 @@ const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const _q3 = new THREE.Quaternion();
 const FWD = new THREE.Vector3(0, 0, 1);
+const _qRoot = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
 
 const animCache = new Map();
@@ -178,9 +179,9 @@ export class Human {
               ? new THREE.MeshPhysicalMaterial({
                   ...common,
                   roughness: 0.52,
-                  sheen: 0.35,
-                  sheenRoughness: 0.75,
-                  sheenColor: new THREE.Color(0xffb69a),
+                  sheen: 0.25,
+                  sheenRoughness: 0.8,
+                  sheenColor: new THREE.Color(0x8c6656),
                   specularIntensity: 0.6,
                   envMapIntensity: 0.8,
                 })
@@ -348,6 +349,27 @@ export class Human {
     this.speech = null;
     this.emoTarget = { shout: 0, smile: this.emoTarget?.smile * 0.5 || 0, worry: 0, sarcasm: 0 };
     if (Math.random() < 0.7) this.blink = 0.16;
+  }
+
+  // Non-verbale reactie terwijl de ander praat.
+  //  'soften'  : uitademen, schouders zakken, kleine knik
+  //  'scoff'   : ogen rollen omhoog, smalende grijns, hoofd schudden
+  //  'startle' : even terugdeinzen (verbazing), daarna nog bozer
+  react(kind) {
+    if (kind === 'soften') {
+      this.inhale(0.5);
+      this.emoTarget = { ...(this.emoTarget || {}), worry: 0.25 };
+      setTimeout(() => this.nod(), 900);
+    } else if (kind === 'scoff') {
+      this.glanceT = 0.8;
+      this.glanceDir.set(0.08, 0.32);
+      this.emoTarget = { ...(this.emoTarget || {}), sarcasm: 0.9 };
+      setTimeout(() => this.shake(), 700);
+      setTimeout(() => (this.emoTarget = { ...(this.emoTarget || {}), sarcasm: 0 }), 2200);
+    } else if (kind === 'startle') {
+      this.surprise = 0.7;
+      this.emph = 1;
+    }
   }
 
   // Zichtbaar inademen (vóór een zin of in een pauze).
@@ -527,7 +549,7 @@ export class Human {
     const br = this.breath * 0.6 + this.pant * (0.5 + 0.5 * Math.sin(this.time * 7.5));
     const sp2 = this.bones.spine2;
     if (!sp2) return;
-    const side = _v.set(1, 0, 0).applyQuaternion(this.root.quaternion);
+    const side = _v.set(1, 0, 0).applyQuaternion(this.root.getWorldQuaternion(_qRoot));
     const pitch = e * 0.07 * (this.emo.shout > 0.3 ? 1.3 : 0.7) - br * 0.035;
     if (Math.abs(pitch) > 1e-4) {
       sp2.getWorldQuaternion(_q);
@@ -648,7 +670,7 @@ export class Human {
       // Rond de verticale en zijwaartse wereldas van het lichaam draaien.
       head.getWorldQuaternion(_q);
       const up = _v.set(0, 1, 0);
-      const side = _v2.set(1, 0, 0).applyQuaternion(this.root.quaternion);
+      const side = _v2.set(1, 0, 0).applyQuaternion(this.root.getWorldQuaternion(_qRoot));
       _q2.setFromAxisAngle(up, yaw).multiply(_q3.setFromAxisAngle(side, pitch));
       const worldNew = _q2.multiply(_q);
       head.parent.getWorldQuaternion(_q3);
@@ -715,7 +737,10 @@ export class Human {
       if (i !== undefined) inf[i] = THREE.MathUtils.clamp(val, 0, 1);
     };
     this.anger += (this.angerTarget - this.anger) * (1 - Math.exp(-2.2 * dt));
-    const A = this.anger;
+    // Schrik dooft langzaam uit en verdringt zolang de boosheid.
+    this.surprise = Math.max(0, (this.surprise || 0) - dt * 0.55);
+    const SUR = this.surprise;
+    const A = this.anger * (1 - SUR * 0.85);
     const E = this.emo;
     const emph = this.emph;
 
@@ -773,7 +798,7 @@ export class Human {
     const jawT = speaking ? openness * (0.7 + 0.6 * Math.min(1, loud)) * (1 + E.shout * 0.45) * (1 - (vs.PP || 0) * 0.9) : 0;
     const breathOpen = this.breath * 0.18 + this.pant * (0.12 + 0.06 * Math.sin(this.time * 7.5));
     this.jaw += (jawT + breathOpen - this.jaw) * (1 - Math.exp(-30 * dt));
-    set('jawOpen', this.jaw);
+    set('jawOpen', this.jaw + SUR * 0.3);
     set('mouthClose', (vs.PP || 0) * 0.35);
     set('lipsPart', speaking ? 0.12 + breathOpen : breathOpen * 1.2);
 
@@ -784,9 +809,9 @@ export class Human {
     set('browDownL', A * 0.85 + angryEmph * 0.3);
     set('browDownR', A * 0.85 + angryEmph * 0.3);
     set('browLower', A * 0.55 + angryEmph * 0.25);
-    set('browInnerUp', Math.max(0, 0.25 - A) * 0.5 + E.worry * 0.7 + calmEmph * 0.45);
-    set('browOuterUpL', calmEmph * 0.5 + E.sarcasm * 0.25);
-    set('browOuterUpR', calmEmph * 0.5);
+    set('browInnerUp', Math.max(0, 0.25 - A) * 0.5 + E.worry * 0.7 + calmEmph * 0.45 + SUR * 0.8);
+    set('browOuterUpL', calmEmph * 0.5 + E.sarcasm * 0.25 + SUR * 0.7);
+    set('browOuterUpR', calmEmph * 0.5 + SUR * 0.7);
     set('sneerL', A * 0.3 + shoutNow * 0.25);
     set('sneerR', A * 0.3 + shoutNow * 0.25);
     set('squintL', A * 0.32 + angryEmph * 0.2);
@@ -807,8 +832,8 @@ export class Human {
     const roundness = (vs.O || 0) + (vs.U || 0);
     set('smileL', (E.smile + E.sarcasm * 0.35) * (1 - roundness * 0.7) + (this.smile || 0));
     set('smileR', E.smile * (1 - roundness * 0.7) + (this.smile || 0));
-    set('wideL', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + (this.surprise || 0));
-    set('wideR', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + (this.surprise || 0));
+    set('wideL', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + SUR * 0.9);
+    set('wideR', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + SUR * 0.9);
 
     // ---- Knipperen (vaker bij spanning) ----
     this.blinkT -= dt;

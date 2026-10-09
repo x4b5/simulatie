@@ -91,7 +91,8 @@ Een nieuwe zin toevoegen:
 2. Maak een mp3 met dezelfde naam in `audio/` (bijvoorbeeld via ElevenLabs).
 3. Laat de mp3 transcriberen met woordtijden (ElevenLabs Scribe) en zet de woorden met
    begin- en eindtijd in `tools/words.json`.
-4. Draai `python3 tools/lipsync.py`. Dat maakt `models/lipsync.json` opnieuw.
+4. Meet de luidheid met `node tools/envelope.mjs` (met een webserver op poort 8123) en draai
+   daarna `python3 tools/lipsync.py`. Dat maakt `models/lipsync.json` opnieuw.
 5. Roep `say(id, 'naam', cues)` aan in `js/main.js`. Leg gebaren in `cues` op de tijden van de
    woorden uit stap 3.
 
@@ -123,7 +124,9 @@ mp3 ─► ElevenLabs Scribe (woorden + tijden) ─► tools/lipsync.py ─► m
          Nederlandse klankregels: ch/g, sch, ij/ei, ui, oe, eu, ie, aa/ee/oo, ng/nk, p/b/m …
 ```
 
-Tijdens het afspelen (`js/human.js`) lopen de lippen ~50 ms voor op het geluid. Mondstanden
+Elke klinker wordt op de luidste plek van zijn lettergreep gelegd (gemeten luidheid per 10 ms,
+`tools/envelope.json`). Tijdens het afspelen (`js/human.js`) lopen de lippen ~50 ms voor op het
+geluid, en sluiten ze bij stiltes binnen een zin. Mondstanden
 overlappen zacht (co-articulatie), en de kaak volgt klinker en volume. Bij schreeuwen worden
 de tanden ontbloot en gaat de kaak verder open. Op benadrukte woorden (HÉ, DÁÁR, ALTIJD, JIJ)
 reageren wenkbrauwen, hoofd en romp, en volgen prik- of hakgebaren. Verder ademt het personage

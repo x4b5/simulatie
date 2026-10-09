@@ -14,6 +14,7 @@ const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const _q3 = new THREE.Quaternion();
 const FWD = new THREE.Vector3(0, 0, 1);
+const UP = new THREE.Vector3(0, 1, 0);
 
 const animCache = new Map();
 
@@ -71,9 +72,13 @@ const KEEP = {
   sil: 'AA_VI_00_Sil',
   PP: 'AA_VI_01_PP',
   FF: 'AA_VI_02_FF',
+  TH: 'AA_VI_03_TH',
   DD: 'AA_VI_04_DD',
+  kk: 'AA_VI_05_KK',
   CH: 'AA_VI_06_CH',
   SS: 'AA_VI_07_SS',
+  nn: 'AA_VI_08_nn',
+  RR: 'AA_VI_09_RR',
   aa: 'AA_VI_10_aa',
   E: 'AA_VI_11_E',
   I: 'AA_VI_12_I',
@@ -82,6 +87,15 @@ const KEEP = {
   browDownL: 'AK_01_BrowDownLeft',
   browDownR: 'AK_02_BrowDownRight',
   browInnerUp: 'AK_03_BrowInnerUp',
+  browOuterUpL: 'AK_04_BrowOuterUpLeft',
+  browOuterUpR: 'AK_05_BrowOuterUpRight',
+  cheekSquintL: 'AK_07_CheekSquintLeft',
+  cheekSquintR: 'AK_08_CheekSquintRight',
+  mouthClose: 'AK_27_MouthClose',
+  stretchL: 'AK_46_MouthStretchLeft',
+  stretchR: 'AK_47_MouthStretchRight',
+  lipRaiser: 'AU_10_UpperLipRaiser',
+  lipsPart: 'AU_25_LipsPart',
   blinkL: 'AK_09_EyeBlinkLeft',
   blinkR: 'AK_10_EyeBlinkRight',
   squintL: 'AK_19_EyeSquintLeft',
@@ -222,6 +236,22 @@ export class Human {
     this._stepPhase = 0;
     this._lastStepSign = 0;
     this.seatOffset = -0.5;
+    // Spraak, nadruk, adem en ogen.
+    this.speech = null; // { track, clock, emo, level, si, bi }
+    this.vis = {}; // huidige visemengewichten (gedempt)
+    this.emph = 0; // nadruk-envelop (0..1)
+    this.emphSign = 1;
+    this.breath = 0; // inademing (0..1)
+    this.breathT = 0;
+    this.pant = 0; // nahijgen na schreeuwen
+    this.jaw = 0;
+    this.emo = { shout: 0, smile: 0, worry: 0, sarcasm: 0 };
+    this.sacc = new THREE.Vector2();
+    this.saccTarget = new THREE.Vector2();
+    this.saccT = 0.5;
+    this.glanceT = 0;
+    this.glanceDir = new THREE.Vector2();
+    this.jabs = [];
     this._play('idle', 0);
   }
 
@@ -276,6 +306,9 @@ export class Human {
     }
     a.reset();
     a.timeScale = timeScale;
+    const once = this.forced && this.forced.name === name && !this.forced.loop;
+    a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+    a.clampWhenFinished = once;
     // Begin ergens willekeurig in lange clips, zodat herhaling minder opvalt.
     if (a.getClip().duration > 10) a.time = Math.random() * (a.getClip().duration - 4);
     a.enabled = true;
@@ -288,6 +321,31 @@ export class Human {
 
   setHands(name) {
     this.handPose = name;
+  }
+
+  // Start lipsync voor een regel. clock() geeft seconden sinds de start van het geluid,
+  // level() het actuele volume (of null).
+  speak(track, clock, emo = {}, level = null) {
+    this.speech = { track, clock, level, si: 0, bi: 0 };
+    this.emoTarget = { shout: 0, smile: 0, worry: 0, sarcasm: 0, ...emo };
+    if (emo.shout > 0.5) this.pant = 0;
+  }
+
+  stopSpeaking() {
+    if (this.speech && (this.emoTarget?.shout || 0) > 0.45) this.pant = 1;
+    this.speech = null;
+    this.emoTarget = { shout: 0, smile: this.emoTarget?.smile * 0.5 || 0, worry: 0, sarcasm: 0 };
+    if (Math.random() < 0.7) this.blink = 0.16;
+  }
+
+  // Zichtbaar inademen (vóór een zin of in een pauze).
+  inhale(dur = 0.35) {
+    this.breathT = dur;
+  }
+
+  // Kort gebaar met een arm naar een punt (prikken, hakken), daarna terug.
+  jab(side, worldPoint, dur = 0.5) {
+    this.jabs.push({ side, p: worldPoint.clone(), t: dur });
   }
 
   setAim(side, worldPoint) {
@@ -332,7 +390,19 @@ export class Human {
     return this.bones.spine2.getWorldPosition(v);
   }
 
+  // Speelt een animatie één keer (of herhaald bij loop=true) en negeert zolang de gewone keuze.
+  playForced(name, timeScale = 1, loop = false) {
+    this.forced = { name, ts: timeScale, loop };
+    const a = this.actions[name];
+    return a ? a.getClip().duration / timeScale : 0;
+  }
+
+  clearForced() {
+    this.forced = null;
+  }
+
   _chooseClip(moving) {
+    if (this.forced) return [this.forced.name, this.forced.ts];
     if (this.seat > 0.5) return ['sit', 1];
     if (moving) {
       const fast = this.walkSpeed > 1.45 && this.actions.walkFast;
@@ -375,7 +445,7 @@ export class Human {
         this._lastStepSign = sgn;
       }
     }
-    if (!moving && this.faceYaw !== null) this.root.rotation.y = turnTowards(this.root.rotation.y, this.faceYaw, 3.5 * dt);
+    if (!moving && this.faceYaw !== null && !this.lockYaw) this.root.rotation.y = turnTowards(this.root.rotation.y, this.faceYaw, 3.5 * dt);
 
     const [clip, ts] = this._chooseClip(moving);
     this._play(clip, moving ? 0.3 : 0.5, ts);
@@ -384,9 +454,69 @@ export class Human {
     this.root.updateMatrixWorld(true);
 
     // Procedurele lagen bovenop de animatie.
+    this._speechClock(dt);
+    this._beatBody(dt);
     this._aimArms(dt);
     this._look(dt);
     this._face(dt);
+  }
+
+  // Loopt de tijdlijn van de huidige regel af: nadruk en adem.
+  _speechClock(dt) {
+    const sp = this.speech;
+    const emoT = this.emoTarget || { shout: 0, smile: 0, worry: 0, sarcasm: 0 };
+    for (const k of Object.keys(this.emo)) this.emo[k] += ((emoT[k] || 0) - this.emo[k]) * (1 - Math.exp(-3 * dt));
+    this.emph = Math.max(0, this.emph - dt * 2.6);
+    if (this.breathT > 0) {
+      this.breathT -= dt;
+      this.breath += (1 - this.breath) * (1 - Math.exp(-10 * dt));
+    } else this.breath *= Math.exp(-5 * dt);
+    this.pant = Math.max(0, this.pant - dt * 0.12);
+    if (!sp) return;
+    const t = sp.clock();
+    const tr = sp.track;
+    while (sp.si < tr.s.length && tr.s[sp.si][0] <= t) {
+      const st = tr.s[sp.si][1];
+      this.emph = Math.max(this.emph, st);
+      if (st >= 0.85 && Math.random() < 0.5) this.blink = 0.16;
+      sp.si++;
+    }
+    while (sp.bi < tr.b.length && tr.b[sp.bi][0] <= t) {
+      this.inhale(tr.b[sp.bi][1] * 0.7);
+      // Soms kort wegkijken bij een pauze, zoals mensen doen als ze nadenken.
+      if (Math.random() < 0.45) {
+        this.glanceT = 0.45 + Math.random() * 0.4;
+        this.glanceDir.set((Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.2), -0.12 - Math.random() * 0.1);
+      }
+      sp.bi++;
+    }
+  }
+
+  // Ritme van het lichaam: op nadruk het hoofd en de romp naar voren, borst die ademt.
+  _beatBody(dt) {
+    const e = this.emph * this.emph;
+    const br = this.breath * 0.6 + this.pant * (0.5 + 0.5 * Math.sin(this.time * 7.5));
+    const sp2 = this.bones.spine2;
+    if (!sp2) return;
+    const side = _v.set(1, 0, 0).applyQuaternion(this.root.quaternion);
+    const pitch = e * 0.07 * (this.emo.shout > 0.3 ? 1.3 : 0.7) - br * 0.035;
+    if (Math.abs(pitch) > 1e-4) {
+      sp2.getWorldQuaternion(_q);
+      _q2.setFromAxisAngle(side, pitch);
+      const worldNew = _q2.multiply(_q);
+      sp2.parent.getWorldQuaternion(_q3);
+      sp2.quaternion.copy(_q3.invert().multiply(worldNew));
+      sp2.updateMatrixWorld(true);
+    }
+    // Korte gebaren (prikken/hakken) via de wijs-IK.
+    for (let i = this.jabs.length - 1; i >= 0; i--) {
+      const j = this.jabs[i];
+      j.t -= dt;
+      if (j.t <= 0) {
+        if (this.aim[j.side] === j.p) this.aim[j.side] = null;
+        this.jabs.splice(i, 1);
+      } else if (!this.aim[j.side] || this.aim[j.side] === j.p) this.aim[j.side] = j.p;
+    }
   }
 
   _aimArms(dt) {
@@ -433,7 +563,7 @@ export class Human {
     const head = this.bones.head;
     if (t && this.lookW > 0.01) {
       // Lichaam meedraaien als het doel te ver opzij is.
-      if (!this.path.length && this.seat < 0.5) {
+      if (!this.path.length && this.seat < 0.5 && !this.lockYaw) {
         const p = this.root.position;
         const yaw = Math.atan2(t.x - p.x, t.z - p.z);
         let d = yaw - this.root.rotation.y;
@@ -471,7 +601,20 @@ export class Human {
       this.shakeT -= dt;
       yaw += Math.sin((1.2 - this.shakeT) * 14) * 0.18 * Math.min(1, this.shakeT * 2.5);
     }
-    pitch += this.mouth.open * 0.04 * Math.sin(this.time * 7);
+    // Op nadruk: korte knik naar voren/omlaag (boos) of omhoog (rustig).
+    pitch += this.emph * this.emph * (this.anger > 0.4 ? 0.09 : -0.05);
+    if (this.speech) pitch += Math.sin(this.time * 6.3) * 0.012 + this.jaw * 0.05;
+    // Kort wegkijken (nadenken): hoofd draait een beetje mee.
+    let gx = 0;
+    let gy = 0;
+    if (this.glanceT > 0) {
+      this.glanceT -= dt;
+      const k = Math.min(1, this.glanceT * 4, (0.9 - this.glanceT) * 6 + 0.2);
+      gx = this.glanceDir.x * k;
+      gy = this.glanceDir.y * k;
+      yaw += gx * 0.35;
+      pitch -= gy * 0.3;
+    }
     if (pitch || yaw) {
       // Rond de verticale en zijwaartse wereldas van het lichaam draaien.
       head.getWorldQuaternion(_q);
@@ -483,15 +626,26 @@ export class Human {
       head.quaternion.copy(_q3.invert().multiply(worldNew));
     }
     head.updateMatrixWorld(true);
+    // Oogsprongetjes: kleine snelle verplaatsingen, minder als iemand boos staart.
+    this.saccT -= dt;
+    if (this.saccT < 0) {
+      const amp = this.anger > 0.6 && !this.speech ? 0.012 : 0.03;
+      this.saccTarget.set((Math.random() - 0.5) * 2 * amp, (Math.random() - 0.5) * amp);
+      this.saccT = 0.35 + Math.random() * (this.anger > 0.6 ? 2.2 : 1.4);
+    }
+    this.sacc.lerp(this.saccTarget, 1 - Math.exp(-40 * dt));
     // Ogen maken oogcontact.
     if (t && this.eyeFwdL) {
       for (const [eye, fwd] of [[this.bones.eyeL, this.eyeFwdL], [this.bones.eyeR, this.eyeFwdR]]) {
         eye.updateMatrixWorld(true);
         eye.getWorldPosition(_v);
         const desired = _v2.copy(t).sub(_v).normalize();
+        // Oogsprongetjes en wegkijken bovenop het doel.
+        const right = _v3.crossVectors(desired, UP).normalize();
+        desired.addScaledVector(right, this.sacc.x + gx).addScaledVector(UP, this.sacc.y + gy).normalize();
         eye.getWorldQuaternion(_q);
         const cur = _v3.copy(fwd).applyQuaternion(_q).normalize();
-        const ang = Math.min(cur.angleTo(desired), 0.45);
+        const ang = Math.min(cur.angleTo(desired), 0.5);
         if (ang < 1e-3) continue;
         const axis = _v.crossVectors(cur, desired).normalize();
         _q2.setFromAxisAngle(axis, ang * this.lookW);
@@ -502,67 +656,122 @@ export class Human {
     }
   }
 
+  // Visemen op tijdstip t uit de tijdlijn: elke mondstand heeft een zachte "bult" rond zijn
+  // middelpunt, zodat klanken in elkaar overlopen (co-articulatie).
+  _visemesAt(track, t, out) {
+    const v = track.v;
+    // binair zoeken naar het eerste keyframe rond t - 0.3 s
+    let lo = 0;
+    let hi = v.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (v[mid][0] < t - 0.3) lo = mid + 1;
+      else hi = mid;
+    }
+    for (let i = lo; i < v.length && v[i][0] < t + 0.3; i++) {
+      const [c, name, g, d] = v[i];
+      const sigma = Math.max(0.028, d * 0.55) + (name === 'PP' ? 0 : 0.018);
+      const x = (t - c) / sigma;
+      const w = g * Math.exp(-0.5 * x * x);
+      if (w > (out[name] || 0)) out[name] = w;
+    }
+    return out;
+  }
+
   _face(dt) {
     if (!this.morphMesh) return;
     const inf = this.morphMesh.morphTargetInfluences;
-    const set = (k, v) => {
+    const set = (k, val) => {
       const i = this.morphIdx[k];
-      if (i !== undefined) inf[i] = THREE.MathUtils.clamp(v, 0, 1);
+      if (i !== undefined) inf[i] = THREE.MathUtils.clamp(val, 0, 1);
     };
     this.anger += (this.angerTarget - this.anger) * (1 - Math.exp(-2.2 * dt));
     const A = this.anger;
+    const E = this.emo;
+    const emph = this.emph;
 
-    // Spraak: volume + klankkleur → visemen.
-    let lvl = 0;
-    let spec = null;
-    if (this.talk) {
-      const r = this.talk();
-      if (typeof r === 'number') lvl = r;
-      else if (r) {
-        lvl = r.level;
-        spec = r;
+    // ---- Spraak ----
+    const want = {};
+    let loud = 0;
+    let speaking = false;
+    if (this.speech) {
+      const sp = this.speech;
+      // Lippen lopen ~50 ms voor op het geluid, zoals bij echte sprekers.
+      const t = sp.clock() + 0.05;
+      if (t < sp.track.dur + 0.2) {
+        this._visemesAt(sp.track, t, want);
+        speaking = true;
       }
+      const lv = sp.level ? sp.level() : null;
+      loud = lv === null ? 0.65 : THREE.MathUtils.clamp(lv * 7, 0, 1.2);
+    } else if (this.talk) {
+      // Terugval zonder tijdlijn: alleen op volume.
+      const r = this.talk();
+      const lv = typeof r === 'number' ? r : r?.level || 0;
+      const o = THREE.MathUtils.clamp(lv * 9, 0, 1);
+      want.aa = o * 0.8;
+      loud = o;
+      speaking = o > 0.02;
     }
-    const open = THREE.MathUtils.clamp(lvl * 9, 0, 1);
-    const k = 1 - Math.exp(-(open > this.mouth.open ? 28 : 14) * dt);
-    this.mouth.open += (open - this.mouth.open) * k;
-    const low = spec ? spec.low : 0.5;
-    const high = spec ? spec.high : 0.3;
-    this.mouth.round += ((low > 0.55 ? 1 : 0) - this.mouth.round) * k;
-    this.mouth.wide += ((high > 0.35 ? 1 : 0) - this.mouth.wide) * k;
-    const o = this.mouth.open;
-    set('aa', o * (1 - this.mouth.round * 0.6) * 0.9);
-    set('O', o * this.mouth.round * 0.7);
-    set('E', o * this.mouth.wide * 0.6);
-    set('SS', (1 - o) * this.mouth.wide * (lvl > 0.02 ? 0.5 : 0));
-    set('jawOpen', o * 0.25);
+    const VIS = ['sil', 'PP', 'FF', 'TH', 'DD', 'kk', 'CH', 'SS', 'nn', 'RR', 'aa', 'E', 'I', 'O', 'U'];
+    // Klinkers ruimer bij luid praten en schreeuwen, medeklinkers blijven strak.
+    const vowelGain = 0.95 + 0.35 * Math.min(1, loud) + E.shout * 0.25;
+    for (const name of VIS) {
+      let target = want[name] || 0;
+      if (name === 'aa' || name === 'E' || name === 'O') target *= vowelGain;
+      const cur = this.vis[name] || 0;
+      const rate = target > cur ? 38 : 22;
+      this.vis[name] = cur + (target - cur) * (1 - Math.exp(-rate * dt));
+      set(name, this.vis[name]);
+    }
+    const vs = this.vis;
+    // Kaak: opening van de klinker × volume; dicht bij p/b/m.
+    const openness = (vs.aa || 0) * 0.55 + (vs.O || 0) * 0.38 + (vs.E || 0) * 0.3 + (vs.I || 0) * 0.14 + (vs.U || 0) * 0.16 + (vs.RR || 0) * 0.12 + (vs.kk || 0) * 0.12;
+    const jawT = speaking ? openness * (0.7 + 0.6 * Math.min(1, loud)) * (1 + E.shout * 0.45) * (1 - (vs.PP || 0) * 0.9) : 0;
+    const breathOpen = this.breath * 0.18 + this.pant * (0.12 + 0.06 * Math.sin(this.time * 7.5));
+    this.jaw += (jawT + breathOpen - this.jaw) * (1 - Math.exp(-30 * dt));
+    set('jawOpen', this.jaw);
+    set('mouthClose', (vs.PP || 0) * 0.35);
+    set('lipsPart', speaking ? 0.12 + breathOpen : breathOpen * 1.2);
 
-    // Emotie: boos → wenkbrauwen omlaag, neus optrekken, mondhoeken omlaag, ogen knijpen.
-    set('browDownL', A * 0.9);
-    set('browDownR', A * 0.9);
-    set('browLower', A * 0.6);
-    set('sneerL', A * 0.35);
-    set('sneerR', A * 0.35);
-    set('frownL', A * 0.5);
-    set('frownR', A * 0.5);
-    set('squintL', A * 0.35);
-    set('squintR', A * 0.35);
-    set('pressL', A * 0.25 * (1 - o));
-    set('pressR', A * 0.25 * (1 - o));
-    set('upperUpL', A * 0.25 * o);
-    set('upperUpR', A * 0.25 * o);
-    set('wideL', this.surprise || 0);
-    set('wideR', this.surprise || 0);
-    const calm = Math.max(0, 0.3 - A);
-    set('browInnerUp', calm * 0.6 + (this.worry || 0));
-    set('smileL', this.smile || 0);
-    set('smileR', this.smile || 0);
+    // ---- Emotie, ook tijdens het praten ----
+    const shoutNow = E.shout * (speaking ? 0.6 + 0.4 * Math.min(1, loud) : 0.35);
+    const angryEmph = A > 0.4 ? emph : 0;
+    const calmEmph = A <= 0.4 ? emph : 0;
+    set('browDownL', A * 0.85 + angryEmph * 0.3);
+    set('browDownR', A * 0.85 + angryEmph * 0.3);
+    set('browLower', A * 0.55 + angryEmph * 0.25);
+    set('browInnerUp', Math.max(0, 0.25 - A) * 0.5 + E.worry * 0.7 + calmEmph * 0.45);
+    set('browOuterUpL', calmEmph * 0.5 + E.sarcasm * 0.25);
+    set('browOuterUpR', calmEmph * 0.5);
+    set('sneerL', A * 0.3 + shoutNow * 0.25);
+    set('sneerR', A * 0.3 + shoutNow * 0.25);
+    set('squintL', A * 0.32 + angryEmph * 0.2);
+    set('squintR', A * 0.32 + angryEmph * 0.2);
+    set('cheekSquintL', shoutNow * 0.3 + E.smile * 0.4);
+    set('cheekSquintR', shoutNow * 0.3 + E.smile * 0.4);
+    // Tanden ontbloten bij schreeuwen, gespannen lippen als hij zwijgt.
+    const vowelOpen = (vs.aa || 0) + (vs.E || 0) + (vs.I || 0);
+    set('upperUpL', A * 0.18 * vowelOpen + shoutNow * 0.45);
+    set('upperUpR', A * 0.18 * vowelOpen + shoutNow * 0.45);
+    set('lipRaiser', shoutNow * 0.25);
+    set('stretchL', shoutNow * 0.35 * Math.min(1, vowelOpen + 0.3));
+    set('stretchR', shoutNow * 0.35 * Math.min(1, vowelOpen + 0.3));
+    set('frownL', A * 0.45 * (speaking ? 0.6 : 1));
+    set('frownR', A * 0.45 * (speaking ? 0.6 : 1));
+    set('pressL', A * 0.3 * (speaking ? 0 : 1) * (1 - breathOpen * 3));
+    set('pressR', A * 0.3 * (speaking ? 0 : 1) * (1 - breathOpen * 3));
+    const roundness = (vs.O || 0) + (vs.U || 0);
+    set('smileL', (E.smile + E.sarcasm * 0.35) * (1 - roundness * 0.7) + (this.smile || 0));
+    set('smileR', E.smile * (1 - roundness * 0.7) + (this.smile || 0));
+    set('wideL', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + (this.surprise || 0));
+    set('wideR', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + (this.surprise || 0));
 
-    // Knipperen.
+    // ---- Knipperen (vaker bij spanning) ----
     this.blinkT -= dt;
     if (this.blinkT < 0) {
       this.blink = 0.16;
-      this.blinkT = 2 + Math.random() * 3.5;
+      this.blinkT = (A > 0.6 ? 1.6 : 2.4) + Math.random() * 3;
     }
     this.blink = Math.max(0, this.blink - dt);
     const b = this.blink > 0 ? Math.sin((this.blink / 0.16) * Math.PI) : 0;

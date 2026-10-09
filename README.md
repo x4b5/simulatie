@@ -85,10 +85,17 @@ Tip voor in de klas: speel het op het digibord en laat de groep eerst stemmen
 | Geluidseffecten en ruimtelijk geluid | `js/audio.js` |
 | Stemopnames | `audio/*.mp3` |
 
-Een nieuwe zin toevoegen: zet de tekst in `LINES` in `js/i18n.js`, maak een mp3 met
-dezelfde naam in `audio/` (bijvoorbeeld via ElevenLabs) en roep `say(id, 'naam')` aan
-in `js/main.js`. Zonder mp3 werkt de oefening ook: dan verschijnt alleen de ondertitel
-en beweegt de mond automatisch.
+Een nieuwe zin toevoegen:
+
+1. Zet de tekst in `LINES` in `js/i18n.js` en geef de zin een emotie in `LINE_EMO` in `js/main.js`.
+2. Maak een mp3 met dezelfde naam in `audio/` (bijvoorbeeld via ElevenLabs).
+3. Laat de mp3 transcriberen met woordtijden (ElevenLabs Scribe) en zet de woorden met
+   begin- en eindtijd in `tools/words.json`.
+4. Draai `python3 tools/lipsync.py`. Dat maakt `models/lipsync.json` opnieuw.
+5. Roep `say(id, 'naam', cues)` aan in `js/main.js`. Leg gebaren in `cues` op de tijden van de
+   woorden uit stap 3.
+
+Zonder lipsync-tijdlijn werkt een zin ook: dan beweegt de mond alleen op het volume.
 
 ## Bekende beperkingen van dit proof of concept
 
@@ -98,8 +105,9 @@ en beweegt de mond automatisch.
 - Geluid start pas na een klik (regel van de browser).
 - De personages komen uit een bestaande bibliotheek. Voor een eigen huisstijl
   (bedrijfskleding, logo op het hesje) moeten de texturen in `models/tex/` worden aangepast.
-- De lipsync is gebaseerd op het geluid (volume en klankkleur), niet op de tekst.
-  Dat is overtuigend op afstand, maar niet foneem-precies.
+- De lipsync volgt de woorden klank voor klank, maar de omzetting van spelling naar
+  mondstand werkt met vuistregels voor het Nederlands. Bij leenwoorden ("scanner")
+  is dat soms een benadering.
 
 ## Techniek
 
@@ -108,7 +116,27 @@ analyser voor lipsync), WebXR. Geen buildstap: gewone ES-modules.
 
 De personages (Marco, Sandra en de collega op de achtergrond) en hun animaties komen uit
 [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) (MIT-licentie, zie
-`models/LICENSE-Rocketbox.md`). De animaties zijn gebakken naar een compact binair formaat
+`models/LICENSE-Rocketbox.md`). ### Lipsync en gezicht
+
+```
+mp3 ─► ElevenLabs Scribe (woorden + tijden) ─► tools/lipsync.py ─► models/lipsync.json
+         Nederlandse klankregels: ch/g, sch, ij/ei, ui, oe, eu, ie, aa/ee/oo, ng/nk, p/b/m …
+```
+
+Tijdens het afspelen (`js/human.js`) lopen de lippen ~50 ms voor op het geluid. Mondstanden
+overlappen zacht (co-articulatie), en de kaak volgt klinker en volume. Bij schreeuwen worden
+de tanden ontbloot en gaat de kaak verder open. Op benadrukte woorden (HÉ, DÁÁR, ALTIJD, JIJ)
+reageren wenkbrauwen, hoofd en romp, en volgen prik- of hakgebaren. Verder ademt het personage
+in vóór een zin en in pauzes, hijgt het na na het schreeuwen, en maken de ogen kleine sprongetjes
+en kijken ze af en toe even weg.
+
+### In- en uitstappen
+
+Uitstappen: contact uit, zijwaarts draaien, opstaan (motion capture) met de hand aan de stijl,
+via de treeplank naar de grond (driepuntscontact). Instappen gaat omgekeerd, met de
+motion capture "gaan zitten".
+
+De animaties zijn gebakken naar een compact binair formaat
 (`models/anim_*.bin`, 24 fps, 16-bit rotaties); `js/human.js` leest dat in. Kijken, wijzen,
 knikken, knipperen, boosheid (ARKit/FACS-blendshapes) en lipsync (visemen) worden
 in realtime bovenop de animaties berekend. De stemmen zijn gemaakt met ElevenLabs.

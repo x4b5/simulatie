@@ -90,7 +90,7 @@ const P = {
   stop: V(-0.75, -7.85),
   flStart: V(14.8, -8.0),
   flLane: -8.0,
-  exitSide: V(2.7, -7.05),
+  exitSide: V(2.3, -6.85),
   stand: V(0.45, -7.4),
   standClose: V(-0.05, -7.55),
   sandraStart: V(-3.0, -19.2),
@@ -314,7 +314,14 @@ function resetScene(state) {
   sandra.setHands('clipboard');
   sandra.angerTarget = 0.15;
   sandra.lookTarget = null;
-  [marco, sandra].forEach((p) => (p.talk = null));
+  fl.on = true;
+  [marco, sandra].forEach((p) => {
+    p.clearForced();
+    p.lockYaw = false;
+    p.talk = null;
+    p.stopSpeaking();
+    p.pant = 0;
+  });
   fl.root.rotation.y = -Math.PI / 2;
   if (state === 'start') {
     rig.position.copy(P.start);
@@ -357,25 +364,56 @@ function fakeTalk() {
   return () => (Math.sin(simT * 17) * 0.5 + 0.5) * 0.08 + 0.02;
 }
 
+// Emotie per regel: stuurt mond, kaak en gezicht tijdens het praten.
+const LINE_EMO = {
+  m1: { shout: 1 },
+  m2: { shout: 0.55 },
+  m3: { shout: 0.15, worry: 0.5 },
+  a1: { worry: 0.45 },
+  a2: { smile: 0.3 },
+  b1: { sarcasm: 1, shout: 0.3 },
+  b2: { shout: 0.35 },
+  c1: { shout: 1 },
+  c2: { shout: 0.45 },
+  s1: { shout: 0.45 },
+};
+let LIPSYNC = {};
+
 async function say(id, key, cues = []) {
   const line = LINES[key];
   const person = line.who === 'sandra' ? sandra : marco;
+  // Eerst zichtbaar inademen, dan pas spreken.
+  person.inhale(0.32);
+  await wait(0.22);
+  guard(id);
   showSub({ who: line.who, key });
   stopVoice();
   voice = audio.ready && person.panner ? audio.voice(key, person.panner) : null;
   const v = voice;
   const dur = v ? v.duration : line.est;
   const live = v && audio.ctx.state === 'running' && !S.muted;
-  person.talk = live ? () => audio.features(v.analyser) : fakeTalk();
+  const t0 = simT;
+  const clock = live ? () => audio.ctx.currentTime - v.startTime : () => simT - t0;
+  const level = live ? () => audio.level(v.analyser) : null;
+  const track = LIPSYNC[key];
+  if (track) person.speak(track, clock, LINE_EMO[key], level);
+  else person.talk = live ? () => audio.features(v.analyser) : fakeTalk();
   for (const [t, fn] of cues) {
     wait(t).then(() => {
       if (id === runId) fn();
     });
   }
-  await wait(dur + 0.2);
+  await wait(dur + 0.15);
+  person.stopSpeaking();
   person.talk = null;
   guard(id);
   if (S.sub && S.sub.key === key) hideSub();
+}
+
+// Punt vlak voor iemand op heuphoogte: doel voor een hakgebaar.
+function chopPoint(p) {
+  const f = new THREE.Vector3(Math.sin(p.root.rotation.y), 0, Math.cos(p.root.rotation.y));
+  return p.root.position.clone().addScaledVector(f, 0.7).setY(0.75);
 }
 
 async function playerSays(id, key) {
@@ -420,40 +458,116 @@ function renderSub() {
 // ------------------------------------------------------------------
 // Heftruck in- en uitstappen
 // ------------------------------------------------------------------
-async function exitForklift(id) {
-  const from = new THREE.Vector3();
-  marco.root.getWorldPosition(from);
-  scene.attach(marco.root);
-  const yaw0 = new THREE.Euler().setFromQuaternion(marco.root.quaternion, 'YXZ').y;
-  marco.root.rotation.set(0, yaw0, 0);
-  marco.setHands('relaxed');
-  const to = P.exitSide;
-  await tween(1.1, (k) => {
-    const e = ease(k);
-    marco.root.position.lerpVectors(from, to, e);
-    marco.root.position.y = from.y * (1 - e) + Math.sin(e * Math.PI) * 0.12;
-    marco.seat = 1 - e;
-    marco.root.rotation.y = yaw0 + (Math.PI / 2) * e;
-  });
-  guard(id);
+// Punt in het assenstelsel van de heftruck (x = linkerzijde, z = vooruit) naar de wereld.
+function flLocal(x, y, z) {
+  fl.root.updateMatrixWorld(true);
+  return fl.root.localToWorld(new THREE.Vector3(x, y, z));
 }
 
-async function enterForklift(id) {
-  const from = marco.root.position.clone();
-  const to = new THREE.Vector3();
-  fl.seatAnchor.getWorldPosition(to);
-  const yaw0 = marco.root.rotation.y;
-  const yaw1 = fl.root.rotation.y;
-  marco.lookTarget = null;
-  await tween(1.0, (k) => {
+// Realistisch uitstappen: motor uit, zijwaarts draaien, opstaan met de hand aan de stijl
+// van de kooi, via de treeplank naar beneden (driepuntscontact).
+async function exitForklift(id) {
+  const m = marco;
+  m.lockYaw = true;
+  // 1. Contactsleutel om: hand naar het dashboard, motor en zwaailamp uit.
+  m.jab('r', flLocal(0.22, 1.05, 0.38), 0.7);
+  await wait(0.45);
+  guard(id);
+  fl.on = false;
+  if (audio.ready) audio.clank(fl.panner, 0, 900);
+  await wait(0.35);
+  guard(id);
+
+  // Overstappen van stoel-houding (met offset) naar wortel op "stoelvloer"-hoogte.
+  const seatFloor = flLocal(0, 0.4, -0.33);
+  scene.attach(m.root);
+  m.root.position.copy(seatFloor);
+  m.root.rotation.set(0, fl.root.rotation.y, 0);
+  m.seat = 0;
+  m.playForced('sit', 1, true);
+
+  // 2. Zijwaarts draaien op de stoel, richting de treeplank.
+  const yawSeat = fl.root.rotation.y;
+  const yawOut = yawSeat + Math.PI / 2;
+  const swivelTo = flLocal(0.16, 0.4, -0.3);
+  await tween(0.75, (k) => {
     const e = ease(k);
-    marco.root.position.lerpVectors(from, to, e);
-    marco.root.position.y += Math.sin(e * Math.PI) * 0.12;
-    marco.seat = e;
-    marco.root.rotation.y = yaw0 + shortAngle(yaw1 - yaw0) * e;
+    m.root.rotation.y = yawSeat + (yawOut - yawSeat) * e;
+    m.root.position.lerpVectors(seatFloor, swivelTo, e);
   });
   guard(id);
+
+  // 3. Opstaan (motion capture) met de rechterhand aan de voorste stijl.
+  const post = flLocal(0.5, 1.55, 0.5);
+  m.setAim('r', post);
+  const step = flLocal(0.62, 0.345, 0.18);
+  const upDur = m.playForced('standUp', 1.25);
+  await tween(upDur * 0.92, (k) => {
+    const e = ease(Math.min(1, k * 1.15));
+    m.root.position.lerpVectors(swivelTo, step, e);
+  });
+  guard(id);
+
+  // 4. Van de treeplank naar de grond.
+  const ground = flLocal(1.15, 0, 0.1);
+  m.playForced('walk', 0.7, true);
+  await tween(0.75, (k) => {
+    const e = ease(k);
+    m.root.position.lerpVectors(step, ground, e);
+    m.root.position.y = step.y * (1 - e) + Math.sin(e * Math.PI) * 0.05;
+    if (k > 0.55) m.setAim('r', null);
+  });
+  guard(id);
+  m.setAim('r', null);
+  m.clearForced();
+  m.lockYaw = false;
+}
+
+// Instappen in omgekeerde volgorde: opstappen met de hand aan de stijl, draaien, gaan zitten, motor aan.
+async function enterForklift(id) {
+  const m = marco;
+  m.lookTarget = null;
+  m.lockYaw = true;
+  const ground = flLocal(1.15, 0, 0.1);
+  const step = flLocal(0.62, 0.345, 0.18);
+  const seatFloor = flLocal(0, 0.4, -0.33);
+  // Naar de treeplank toe draaien.
+  const yawIn = fl.root.rotation.y - Math.PI / 2;
+  const yaw0 = m.root.rotation.y;
+  const from = m.root.position.clone();
+  await tween(0.45, (k) => {
+    const e = ease(k);
+    m.root.rotation.y = yaw0 + shortAngle(yawIn - yaw0) * e;
+    m.root.position.lerpVectors(from, ground, e);
+  });
+  guard(id);
+  // Opstappen met de linkerhand aan de voorste stijl.
+  m.setAim('l', flLocal(0.5, 1.55, 0.5));
+  m.playForced('walk', 0.7, true);
+  await tween(0.7, (k) => {
+    const e = ease(k);
+    m.root.position.lerpVectors(ground, step, e);
+    m.root.position.y = step.y * e + Math.sin(e * Math.PI) * 0.08;
+  });
+  guard(id);
+  // Omdraaien en gaan zitten (motion capture).
+  const sitDur = m.playForced('sitDown', 1.3);
+  const yawSeat = fl.root.rotation.y;
+  await tween(sitDur * 0.9, (k) => {
+    const e = ease(Math.min(1, k * 1.25));
+    m.root.rotation.y = yawIn + shortAngle(yawSeat - yawIn) * e;
+    m.root.position.lerpVectors(step, seatFloor, e);
+    if (k > 0.35) m.setAim('l', null);
+  });
+  guard(id);
+  m.clearForced();
+  m.lockYaw = false;
   seatMarco();
+  // Motor aan.
+  m.jab('r', flLocal(0.22, 1.05, 0.38), 0.6);
+  await wait(0.4);
+  guard(id);
+  fl.on = true;
 }
 
 function shortAngle(d) {
@@ -508,7 +622,10 @@ async function runIntro(id) {
   await wait(0.7);
   guard(id);
 
-  await say(id, 'm1', [[0.3, () => marco.setHands('armsOut')]]);
+  await say(id, 'm1', [
+    [0.1, () => marco.setHands('shout')],
+    [0.6, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.6)],
+  ]);
   await exitForklift(id);
   await marco.walkTo([[P.stand.x, P.stand.z]], 1.6);
   guard(id);
@@ -517,24 +634,24 @@ async function runIntro(id) {
   lookAtFn(marcoHead, 4);
 
   await say(id, 'm2', [
-    [1.45, () => {
+    [0.0, () => marco.setHands('armsOut')],
+    [2.15, () => {
       marco.setAim('l', WALKWAY);
       marco.lookTarget = WALKWAY;
       lookAtFn(() => tmp.copy(WALKWAY), 2.2);
     }],
-    [3.3, () => {
-      marco.lookTarget = playerHead;
-      lookAtFn(marcoHead, 2.5);
-    }],
-    [4.5, () => {
+    [3.4, () => (marco.lookTarget = playerHead)],
+    [4.6, () => lookAtFn(marcoHead, 2.5)],
+    [5.15, () => {
       marco.setAim('l', null);
-      marco.setHands('armsOut');
+      marco.setHands('shout');
     }],
+    [6.35, () => marco.jab('r', chopPoint(marco), 0.5)],
   ]);
   marco.setHands('angry');
   await say(id, 'm3', [
     [0.1, () => marco.setHands('armsOut')],
-    [2.3, () => marco.setHands('headHand')],
+    [2.45, () => marco.setHands('headHand')],
   ]);
   marco.setHands('angry');
   await wait(0.5);
@@ -578,18 +695,19 @@ async function branchA(id) {
   guard(id);
   await say(id, 'a1', [
     [0.0, () => marco.setHands('calm')],
-    [2.7, () => {
+    [3.3, () => {
       marco.setHands('relaxed');
       marco.angerTarget = 0.12;
     }],
   ]);
   await say(id, 'a2', [
-    [0.3, () => marco.setAim('l', WALKWAY)],
-    [2.3, () => {
+    [0.0, () => marco.setHands('calm')],
+    [0.9, () => marco.setAim('l', WALKWAY)],
+    [1.65, () => {
       marco.setAim('l', null);
       marco.nod();
     }],
-    [4.2, () => marco.setHands('hips')],
+    [3.9, () => marco.setHands('hips')],
   ]);
   marco.angerTarget = 0;
   marco.nod();
@@ -611,16 +729,15 @@ async function branchB(id) {
   marco.angerTarget = 0.85;
   await say(id, 'b1', [
     [0.0, () => marco.setHands('armsOut')],
-    [1.0, () => marco.setAim('r', playerChest(new THREE.Vector3()))],
-    [3.0, () => {
-      marco.setAim('r', null);
-      marco.setHands('angry');
-    }],
+    [1.9, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.8)],
+    [3.0, () => marco.setHands('angry')],
   ]);
   let walk = null;
   await say(id, 'b2', [
-    [0.3, () => marco.shake()],
-    [3.9, () => {
+    [0.0, () => marco.setHands('armsOut')],
+    [0.9, () => marco.shake()],
+    [4.0, () => marco.jab('r', chopPoint(marco), 0.55)],
+    [5.2, () => {
       marco.lookTarget = null;
       marco.setHands('relaxed');
       walk = marco.walkTo([[P.exitSide.x, P.exitSide.z]], 1.45);
@@ -641,16 +758,18 @@ async function branchC(id) {
   marco.walkTo([[P.standClose.x, P.standClose.z]], 1.0).then(() => marco.faceTowards(P.stop.x, P.stop.z));
   shake(0.04);
   await say(id, 'c1', [
-    [0.0, () => marco.setHands('armsOut')],
-    [2.8, () => marco.setHands('angry')],
+    [0.0, () => marco.setHands('shout')],
+    [1.38, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.6)],
+    [2.85, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.5)],
+    [3.5, () => marco.setHands('armsOut')],
   ]);
   sandra.root.visible = true;
   sandra.root.position.copy(P.sandraStart);
   sandra.lookTarget = marcoHead;
   const sw = sandra.walkTo([[-1.7, -12.0], [P.sandraStop.x, P.sandraStop.z]], 2.1);
   await say(id, 'c2', [
-    [1.0, () => marco.setAim('r', OFFICE)],
-    [3.0, () => {
+    [1.75, () => marco.setAim('r', OFFICE)],
+    [2.6, () => {
       marco.setAim('r', null);
       marco.setHands('angry');
     }],
@@ -663,7 +782,8 @@ async function branchC(id) {
   await say(id, 's1', [
     [0.0, () => sandra.setHands('calm')],
     [1.6, () => (sandra.lookTarget = playerHead)],
-    [3.2, () => {
+    [2.9, () => sandra.setHands('firm')],
+    [4.3, () => {
       sandra.setAim('r', OFFICE);
       sandra.lookTarget = marcoHead;
     }],
@@ -1133,7 +1253,7 @@ function updateAudio(dt) {
 
 function loop() {
   const now = performance.now();
-  const dt = Math.min(DT_MAX, (now - last) / 1000);
+  const dt = window.__simFreeze ? 0 : Math.min(DT_MAX, (now - last) / 1000);
   last = now;
   simT += dt;
 
@@ -1201,6 +1321,9 @@ async function boot() {
       ])
     : Promise.resolve();
   await fontsReady;
+  LIPSYNC = await fetch('models/lipsync.json')
+    .then((r) => r.json())
+    .catch(() => ({}));
   await makeCast();
   resetScene('start');
   setPhase('title');

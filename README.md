@@ -133,6 +133,13 @@ reageren wenkbrauwen, hoofd en romp, en volgen prik- of hakgebaren. Verder ademt
 in vóór een zin en in pauzes, hijgt het na na het schreeuwen, en maken de ogen kleine sprongetjes
 en kijken ze af en toe even weg.
 
+### Emotie en reacties
+
+Bij het bijna-ongeluk schrikt Marco eerst (grote ogen, wenkbrauwen omhoog, mond open) voordat de
+boosheid komt. Terwijl de speler antwoordt reageert hij al non-verbaal: ontspannen en uitademen (A),
+ogen rollen en smalend grijnzen (B), of even terugdeinzen en daarna bozer worden (C). De speler
+deinst zelf terug bij het remmen en zet een stap achteruit als Marco te dichtbij komt.
+
 ### In- en uitstappen
 
 Uitstappen: contact uit, zijwaarts draaien, opstaan (motion capture) met de hand aan de stijl,

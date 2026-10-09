@@ -27,6 +27,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
+// VR: randen van het beeld met minder detail renderen (foveated rendering) voor een vloeiend beeld.
+renderer.xr.setFoveation(0.6);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x2b3036);
@@ -205,6 +207,18 @@ function pathRemaining() {
   }
   return d;
 }
+// Speler deinst terug: korte verplaatsing (x,z in meters) en even door de knieën.
+let crouch = 0;
+function flinch(delta, dur = 0.4, duck = true) {
+  const from = rig.position.clone();
+  const to = from.clone().add(delta);
+  tween(dur, (k) => {
+    const e = 1 - Math.pow(1 - k, 3);
+    rig.position.lerpVectors(from, to, e);
+    if (duck && !reduceMotion) crouch = Math.sin(k * Math.PI) * 0.09;
+  }).then(() => (crouch = 0));
+}
+
 function shake(a) {
   if (!reduceMotion) look.shake = Math.max(look.shake, a);
 }
@@ -642,6 +656,10 @@ async function runIntro(id) {
   showHud(false);
   lookAtFn(marcoHead, 10);
   shake(0.05);
+  // Marco schrikt eerst (ziet je pas laat), de speler deinst terug.
+  marco.lookTarget = playerHead;
+  marco.surprise = 1;
+  flinch(V(-0.28, 0.12), 0.35);
 
   await drive;
   guard(id);
@@ -719,6 +737,7 @@ async function runBranch(id, key) {
 }
 
 async function branchA(id) {
+  wait(0.9).then(() => id === runId && marco.react('soften'));
   await playerSays(id, 'A');
   marco.angerTarget = 0.4;
   marco.setHands('relaxed');
@@ -756,6 +775,7 @@ async function branchA(id) {
 }
 
 async function branchB(id) {
+  wait(1.3).then(() => id === runId && marco.react('scoff'));
   await playerSays(id, 'B');
   marco.angerTarget = 0.85;
   await say(id, 'b1', [
@@ -784,9 +804,11 @@ async function branchB(id) {
 }
 
 async function branchC(id) {
+  wait(0.7).then(() => id === runId && marco.react('startle'));
   await playerSays(id, 'C');
   marco.angerTarget = 1;
   marco.walkTo([[P.standClose.x, P.standClose.z]], 1.0).then(() => marco.faceTowards(P.stop.x, P.stop.z));
+  wait(0.55).then(() => id === runId && flinch(V(-0.22, -0.12), 0.6, false));
   shake(0.04);
   await say(id, 'c1', [
     [0.0, () => marco.setHands('shout')],
@@ -1251,9 +1273,12 @@ function updateCamera(dt) {
   const bobA = reduceMotion ? 0 : player.moving;
   const bobY = Math.sin(player.phase * 2) * 0.022 * bobA;
   const bobR = Math.sin(player.phase) * 0.006 * bobA;
-  camera.position.set(0, EYE + bobY, 0);
+  // Lichte ademhaling van de speler als die stilstaat.
+  const still = 1 - player.moving;
+  const breathY = reduceMotion ? 0 : Math.sin(simT * 1.45) * 0.006 * still;
+  camera.position.set(0, EYE + bobY + breathY - crouch, 0);
   camera.rotation.set(
-    look.pitch + look.uPitch + (Math.random() - 0.5) * sh,
+    look.pitch + look.uPitch + (Math.random() - 0.5) * sh + (reduceMotion ? 0 : Math.sin(simT * 1.45 + 0.6) * 0.0035 * still),
     look.yaw + look.uYaw + (Math.random() - 0.5) * sh,
     bobR + (Math.random() - 0.5) * sh * 0.5,
     'YXZ',
@@ -1282,8 +1307,26 @@ function updateAudio(dt) {
   }
 }
 
+// Automatisch de resolutie verlagen als het apparaat het niet bijhoudt (niet in VR).
+const perf = { t: 0, frames: 0, ratio: Math.min(window.devicePixelRatio || 1, 2) };
+function adaptResolution(rawDt) {
+  if (renderer.xr.isPresenting || S.phase === 'loading') return;
+  perf.t += rawDt;
+  perf.frames++;
+  if (perf.t < 2.5) return;
+  const fps = perf.frames / perf.t;
+  perf.t = 0;
+  perf.frames = 0;
+  if (fps < 38 && perf.ratio > 0.75) perf.ratio = Math.max(0.75, perf.ratio - 0.25);
+  else if (fps > 58 && perf.ratio < Math.min(window.devicePixelRatio || 1, 2)) perf.ratio = Math.min(Math.min(window.devicePixelRatio || 1, 2), perf.ratio + 0.25);
+  else return;
+  renderer.setPixelRatio(perf.ratio);
+  onResize();
+}
+
 function loop() {
   const now = performance.now();
+  if (!/dtmax/.test(location.search)) adaptResolution(Math.min(1, (now - last) / 1000));
   const dt = window.__simFreeze ? 0 : Math.min(DT_MAX, (now - last) / 1000);
   last = now;
   simT += dt;

@@ -164,15 +164,27 @@ export class Human {
         n.receiveShadow = true;
         n.frustumCulled = false;
         const mats = [].concat(n.material).map((m) => {
-          const part = /head/i.test(m.name) ? 'head' : /helmet/i.test(m.name) ? 'helmet' : 'body';
+          const part = /head/i.test(m.name) ? 'head' : /helmet/i.test(m.name) ? 'helmet' : /tools/i.test(m.name) ? 'tools' : 'body';
           if (part === 'helmet') return new THREE.MeshBasicMaterial({ visible: false });
-          const mat = new THREE.MeshStandardMaterial({
+          const common = {
             name: m.name,
             map: tex(`${dir}${code}_${part}_color.jpg`, true),
             normalMap: tex(`${dir}${code}_${part}_normal.jpg`, false),
-            roughness: part === 'head' ? 0.62 : 0.85,
             metalness: 0,
-          });
+          };
+          // Huid: zachte, warme glans aan de randen (sheen) geeft een minder plastic gezicht.
+          const mat =
+            part === 'head'
+              ? new THREE.MeshPhysicalMaterial({
+                  ...common,
+                  roughness: 0.52,
+                  sheen: 0.35,
+                  sheenRoughness: 0.75,
+                  sheenColor: new THREE.Color(0xffb69a),
+                  specularIntensity: 0.6,
+                  envMapIntensity: 0.8,
+                })
+              : new THREE.MeshStandardMaterial({ ...common, roughness: part === 'tools' ? 0.6 : 0.85 });
           mat.normalScale.set(1, -1);
           return mat;
         });
@@ -408,8 +420,10 @@ export class Human {
       const fast = this.walkSpeed > 1.45 && this.actions.walkFast;
       const name = fast ? 'walkFast' : 'walk';
       const natural = fast ? 1.65 : 1.25;
-      return [name, THREE.MathUtils.clamp(this.walkSpeed / natural, 0.6, 1.5)];
+      const v = Math.max(this.curSpeed || 0, 0.35);
+      return [name, THREE.MathUtils.clamp(v / natural, 0.45, 1.5)];
     }
+    if (this.turning) return ['walk', 0.55];
     // Wijzen: presentatiegebaar als basis, arm wordt daarna met IK gericht.
     const options = POSE_CLIPS[this.handPose] || POSE_CLIPS.relaxed;
     const name = options.find((n) => this.actions[n]) || 'idle';
@@ -435,7 +449,11 @@ export class Human {
         }
       } else {
         _v.normalize();
-        p.addScaledVector(_v, Math.min(dist, this.walkSpeed * dt));
+        // Geleidelijk op gang komen en afremmen voor het laatste punt.
+        const remaining = this.path.length === 1 ? dist : 99;
+        const vMax = Math.min(this.walkSpeed, Math.sqrt(2 * 2.2 * remaining) + 0.25);
+        this.curSpeed = Math.min(vMax, (this.curSpeed || 0) + 2.6 * dt);
+        p.addScaledVector(_v, Math.min(dist, this.curSpeed * dt));
         this.root.rotation.y = turnTowards(this.root.rotation.y, Math.atan2(_v.x, _v.z), 6 * dt);
         moving = true;
         this.faceYaw = null;
@@ -446,9 +464,20 @@ export class Human {
       }
     }
     if (!moving && this.faceYaw !== null && !this.lockYaw) this.root.rotation.y = turnTowards(this.root.rotation.y, this.faceYaw, 3.5 * dt);
+    if (!moving) this.curSpeed = 0;
+
+    // Draait hij op de plek? Dan kleine stapjes in plaats van glijden.
+    let dy = this.root.rotation.y - (this._prevYaw ?? this.root.rotation.y);
+    while (dy > Math.PI) dy -= Math.PI * 2;
+    while (dy < -Math.PI) dy += Math.PI * 2;
+    this._prevYaw = this.root.rotation.y;
+    const yawRate = dt > 0 ? Math.abs(dy) / dt : 0;
+    if (!moving && this.seat < 0.5 && !this.lockYaw && yawRate > 0.45) this.turnHold = 0.3;
+    else this.turnHold = Math.max(0, (this.turnHold || 0) - dt);
+    this.turning = !moving && this.turnHold > 0;
 
     const [clip, ts] = this._chooseClip(moving);
-    this._play(clip, moving ? 0.3 : 0.5, ts);
+    this._play(clip, moving || this.turning ? 0.3 : 0.5, ts);
     this.model.position.y = this.seat > 0.5 ? this.seatOffset * this.seat * 100 * 0.01 : 0;
     this.mixer.update(dt);
     this.root.updateMatrixWorld(true);
@@ -702,8 +731,22 @@ export class Human {
         this._visemesAt(sp.track, t, want);
         speaking = true;
       }
-      const lv = sp.level ? sp.level() : null;
-      loud = lv === null ? 0.65 : THREE.MathUtils.clamp(lv * 7, 0, 1.2);
+      const e = sp.track.e;
+      if (e) {
+        // Gemeten luidheid van de opname (per 20 ms), lineair geïnterpoleerd.
+        const f = Math.max(0, (t - 0.02) / 0.02);
+        const i = Math.floor(f);
+        const a0 = e[Math.min(i, e.length - 1)] || 0;
+        const a1 = e[Math.min(i + 1, e.length - 1)] || 0;
+        loud = (a0 + (a1 - a0) * (f - i)) / 99;
+        // Stilte binnen de zin: lippen gaan dicht.
+        const gate = THREE.MathUtils.smoothstep(loud, 0.025, 0.11);
+        for (const k of Object.keys(want)) if (k !== 'PP') want[k] *= gate;
+        loud = Math.min(1.2, loud * 1.35);
+      } else {
+        const lv = sp.level ? sp.level() : null;
+        loud = lv === null ? 0.65 : THREE.MathUtils.clamp(lv * 7, 0, 1.2);
+      }
     } else if (this.talk) {
       // Terugval zonder tijdlijn: alleen op volume.
       const r = this.talk();

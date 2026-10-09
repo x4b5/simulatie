@@ -41,7 +41,8 @@ function canvas(w, h, draw) {
 }
 
 function std(color, rough = 0.8, extra = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, ...extra });
+  // Minder omgevingsreflectie: anders oogt de hal vlak en uitgebleekt.
+  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, envMapIntensity: 0.4, ...extra });
 }
 
 function decalMat(map, extra = {}) {
@@ -171,7 +172,7 @@ export function buildWorld(scene, renderer) {
   concrete.wrapS = concrete.wrapT = THREE.RepeatWrapping;
   concrete.repeat.set(9, 9);
   concrete.anisotropy = maxAniso;
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), std(0xffffff, 0.72, { map: concrete, metalness: 0.02 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), std(0xffffff, 0.62, { map: concrete, metalness: 0.02 }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(4, 0, -6);
   floor.receiveShadow = true;
@@ -553,7 +554,109 @@ export function buildWorld(scene, renderer) {
   // Losse rekwisieten: lege pallets, rolcontainers, palletwagen, brandblusser.
   props(world);
 
+  // Daglicht door dock 3: lichtbundel, warme vlek op de vloer en zwevend stof.
+  const updates = [];
+  updates.push(daylightShaft(world, LAYOUT.docks[2], BZ));
+
+  world.userData.update = (dt, t) => updates.forEach((u) => u(dt, t));
   return world;
+}
+
+// Zachte schaduwvlek (contactschaduw/omgevingsocclusie) als vloerdecal.
+export function softShadow(w, d, opacity = 0.55, round = true) {
+  const tex = canvas(128, 128, (g, cw, ch) => {
+    if (round) {
+      const grd = g.createRadialGradient(cw / 2, ch / 2, 0, cw / 2, ch / 2, cw / 2);
+      grd.addColorStop(0, 'rgba(0,0,0,1)');
+      grd.addColorStop(0.45, 'rgba(0,0,0,0.55)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, cw, ch);
+    } else {
+      // Rechthoek met zachte randen.
+      g.filter = 'blur(14px)';
+      g.fillStyle = '#000';
+      g.fillRect(22, 22, cw - 44, ch - 44);
+    }
+  });
+  tex.colorSpace = THREE.NoColorSpace;
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, color: 0x000000 }),
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.renderOrder = 1;
+  return m;
+}
+
+function daylightShaft(world, x, bz) {
+  const group = new THREE.Group();
+  world.add(group);
+  // Bundel: drie gekruiste vlakken met een verloop, additief gemengd.
+  const tex = canvas(64, 256, (g, w, h) => {
+    const grd = g.createLinearGradient(0, 0, 0, h);
+    grd.addColorStop(0, 'rgba(255,240,215,0.55)');
+    grd.addColorStop(0.5, 'rgba(255,236,205,0.18)');
+    grd.addColorStop(1, 'rgba(255,230,200,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, w, h);
+    const side = g.createLinearGradient(0, 0, w, 0);
+    side.addColorStop(0, 'rgba(0,0,0,1)');
+    side.addColorStop(0.2, 'rgba(0,0,0,0)');
+    side.addColorStop(0.8, 'rgba(0,0,0,0)');
+    side.addColorStop(1, 'rgba(0,0,0,1)');
+    g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = side;
+    g.fillRect(0, 0, w, h);
+  });
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide, toneMapped: false, opacity: 0.32 });
+  const len = 9;
+  const tilt = 0.32; // bundel valt schuin naar beneden de hal in
+  for (let i = 0; i < 3; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(3.0 + i * 0.4, len), mat);
+    p.position.set(x, 1.7, bz + len / 2);
+    p.rotation.set(-Math.PI / 2 + tilt, 0, (i - 1) * 0.35);
+    p.renderOrder = 5;
+    group.add(p);
+  }
+  // Warme lichtvlek op de vloer.
+  const spot = new THREE.SpotLight(0xffd9a8, 90, 16, 0.55, 0.8, 1.4);
+  spot.position.set(x, 3.0, bz + 0.3);
+  spot.target.position.set(x, 0, bz + 6);
+  group.add(spot, spot.target);
+  // Stof dat in het licht zweeft.
+  const N = 260;
+  const pos = new Float32Array(N * 3);
+  const seed = [];
+  for (let i = 0; i < N; i++) {
+    const k = rand();
+    const z = bz + 0.4 + k * 7.5;
+    pos[i * 3] = x + (rand() - 0.5) * (2.6 + k * 1.4);
+    pos[i * 3 + 1] = 0.3 + rand() * (3.0 - k * 1.6);
+    pos[i * 3 + 2] = z;
+    seed.push(rand() * 10);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const dot = canvas(32, 32, (g) => {
+    const grd = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grd.addColorStop(0, 'rgba(255,245,225,1)');
+    grd.addColorStop(1, 'rgba(255,245,225,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 32, 32);
+  });
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ map: dot, size: 0.035, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true }));
+  group.add(pts);
+  const base = pos.slice();
+  return (dt, t) => {
+    for (let i = 0; i < N; i++) {
+      const s = seed[i];
+      pos[i * 3] = base[i * 3] + Math.sin(t * 0.13 + s) * 0.25;
+      pos[i * 3 + 1] = base[i * 3 + 1] + Math.sin(t * 0.09 + s * 1.7) * 0.2;
+      pos[i * 3 + 2] = base[i * 3 + 2] + Math.cos(t * 0.11 + s) * 0.2;
+    }
+    geo.attributes.position.needsUpdate = true;
+  };
 }
 
 function tri(g, x1, y1, x2, y2, x3, y3) {
@@ -715,6 +818,19 @@ function buildRacks(world) {
     }
   }
   inst(guards, std(0xf0b400, 0.5));
+
+  // Donkere randen op de vloer onder elke stellingrij (zachte omgevingsocclusie).
+  const len = zStart - zEnd;
+  for (const row of rows) {
+    const segs = row.gap ? [[zStart, row.gap[1]], [row.gap[0], zEnd]] : [[zStart, zEnd]];
+    for (const [a, b] of segs) {
+      const l = a - b;
+      const ao = softShadow(row.x1 - row.x0 + 1.2, l + 1.0, 0.5, false);
+      ao.position.set((row.x0 + row.x1) / 2, 0.006, (a + b) / 2);
+      world.add(ao);
+    }
+  }
+  void len;
 }
 
 function props(world) {

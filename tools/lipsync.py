@@ -8,6 +8,7 @@ Per regel:
   v: [[t, viseme, gewicht, duur], ...]   mondstanden (Oculus/Rocketbox-visemen)
   s: [[t, sterkte], ...]                 nadruk (hoofdletters, uitroepen, lange klinkers)
   b: [[t, duur], ...]                    adempauzes tussen zinsdelen
+  e: [0..99, ...]                        luidheid per 20 ms (uit tools/envelope.json)
 Gebruik: python3 tools/lipsync.py
 """
 import json
@@ -113,7 +114,27 @@ def stress_of(word):
     return s
 
 
-def build(entry):
+REF_RMS = 0.33  # absolute luidheid die als "vol" geldt
+
+
+def env_at(env, t):
+    i = int(round(t / env['hop']))
+    if i < 0 or i >= len(env['env']):
+        return 0.0
+    return env['env'][i]
+
+
+def peak_in(env, a, b):
+    """Tijdstip van de luidste frame tussen a en b."""
+    hop = env['hop']
+    i0, i1 = max(0, int(a / hop)), min(len(env['env']) - 1, int(b / hop) + 1)
+    if i1 <= i0:
+        return (a + b) / 2, 0.0
+    best = max(range(i0, i1 + 1), key=lambda i: env['env'][i])
+    return best * hop, env['env'][best]
+
+
+def build(entry, env=None):
     words = [w for w in entry['words'] if not w['w'].endswith(']')]
     vis, stress, breaths = [], [], []
     prev_end = 0.0
@@ -136,16 +157,32 @@ def build(entry):
         t = s
         for v, g, d in segs:
             sd = dur * d / total
-            boost = 1.0 + (0.25 * st if v in ('aa', 'E', 'I', 'O', 'U') else 0)
-            vis.append([round(t + sd / 2, 3), v, round(min(1.0, g * boost), 2), round(sd, 3)])
+            c = t + sd / 2
+            is_vowel = v in ('aa', 'E', 'I', 'O', 'U')
+            boost = 1.0 + (0.25 * st if is_vowel else 0)
+            if env and is_vowel:
+                # Klinker op de luidste plek van de lettergreep leggen (binnen het woord).
+                pc, lv = peak_in(env, max(s, c - 0.07), min(e, c + 0.07))
+                c = pc if lv > 0.05 else c
+                boost *= 0.55 + 0.6 * min(1.0, lv / 0.6)
+            vis.append([round(c, 3), v, round(min(1.0, g * boost), 2), round(sd, 3)])
             t += sd
         prev_end = e
-    return {'dur': entry['dur'], 'v': vis, 's': stress, 'b': breaths}
+    vis.sort(key=lambda k: k[0])
+    out = {'dur': entry['dur'], 'v': vis, 's': stress, 'b': breaths}
+    if env:
+        # Luidheid per 20 ms (0..99), absoluut geschaald: stuurt kaak en sluiten bij stilte.
+        scale = env['max'] / REF_RMS
+        frames = env['env'][::2]
+        out['e'] = [min(99, int(round(v * scale * 99))) for v in frames]
+    return out
 
 
 def main():
     src = json.load(open(os.path.join(ROOT, 'tools', 'words.json'), encoding='utf-8'))
-    out = {k: build(v) for k, v in src.items()}
+    env_path = os.path.join(ROOT, 'tools', 'envelope.json')
+    envs = json.load(open(env_path)) if os.path.exists(env_path) else {}
+    out = {k: build(v, envs.get(k)) for k, v in src.items()}
     path = os.path.join(ROOT, 'models', 'lipsync.json')
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(out, f, separators=(',', ':'))

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { buildWorld, LAYOUT } from './world.js';
+import { buildWorld, LAYOUT, softShadow } from './world.js';
 import { Human } from './human.js';
 import { Forklift, FORK_TIP } from './forklift.js';
 import { AudioEngine } from './audio.js';
@@ -36,7 +36,7 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const hemi = new THREE.HemisphereLight(0xe6edf5, 0x4a463f, 0.4);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff0dc, 1.8);
+const sun = new THREE.DirectionalLight(0xf4f6ff, 1.8);
 sun.position.set(7, 19, 6);
 sun.target.position.set(1, 0, -7);
 sun.castShadow = true;
@@ -222,8 +222,13 @@ let sandra;
 let npc;
 let parked;
 
+let worldGroup = null;
+let npc2;
+let npc3;
+const blobs = [];
+
 async function makeCast() {
-  buildWorld(scene, renderer);
+  worldGroup = buildWorld(scene, renderer);
 
   fl = new Forklift({ number: '07' });
   scene.add(fl.root);
@@ -249,6 +254,32 @@ async function makeCast() {
     Human.load({ model: 'models/collega.fbx', code: 'm107', anims: 'models/anim_m' }),
   ]);
   scene.add(marco.root, sandra.root, npc.root);
+
+  // Meer leven in de hal: een orderpicker bij de stelling en een collega bij de docks.
+  [npc2, npc3] = await Promise.all([
+    Human.load({ model: 'models/collega2.fbx', code: 'm102', anims: 'models/anim_m' }),
+    Human.load({ model: 'models/collega3.fbx', code: 'm105', anims: 'models/anim_m' }),
+  ]);
+  npc2.root.position.set(-6.75, 0, -12.2);
+  npc2.root.rotation.y = -Math.PI / 2;
+  npc2.playForced('lookAround', 0.8, true);
+  npc3.root.position.set(-5.6, 0, -19.4);
+  npc3.root.rotation.y = Math.PI * 0.85;
+  npc3.playForced('talkNeutral', 1, true);
+  scene.add(npc2.root, npc3.root);
+
+  // Zachte contactschaduwen onder personen en heftrucks.
+  for (const p of [marco, sandra, npc, npc2, npc3]) {
+    const b = softShadow(0.95, 0.95, 0.5, true);
+    scene.add(b);
+    blobs.push({ p, b });
+  }
+  for (const t of [fl, bgTruck, parked]) {
+    const b = softShadow(1.7, 2.9, 0.55, false);
+    b.position.set(0, 0.006, -0.05);
+    b.rotation.x = -Math.PI / 2;
+    t.root.add(b);
+  }
   npc.root.position.set(-9, 0, -20.9);
   npcLoop();
 
@@ -1297,6 +1328,14 @@ function loop() {
   marco.update(wdt);
   sandra.update(wdt);
   npc.update(wdt);
+  npc2.update(wdt);
+  npc3.update(wdt);
+  worldGroup?.userData.update?.(dt, simT);
+  for (const { p, b } of blobs) {
+    const show = p.root.visible && p.root.parent === scene && p.seat < 0.5;
+    b.visible = show;
+    if (show) b.position.set(p.root.position.x, 0.006, p.root.position.z);
+  }
   updateCamera(dt);
   updateAudio(dt);
   vrui.update(dt);

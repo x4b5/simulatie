@@ -5,7 +5,7 @@ import { Forklift, FORK_TIP } from './forklift.js';
 import { UI, LINES, CHOICES, OUTCOMES } from './i18n.js';
 import { CHOICE_ICON } from './icons.js';
 import {
-  $, V, renderer, scene, rig, audio, S, runId, simT, later, wait, until, tween, guard, ease, shortAngle,
+  $, V, renderer, scene, rig, audio, S, runId, simT, later, waitReal, wait, until, tween, guard, ease, shortAngle,
   look, player, tmp, tmp2, yawTo, lookAtFn, lookDir, snapLook, playerWalk, playerStop, pathRemaining,
   flinch, shake, playerHead, playerChest, say, playerSays, stopVoice, hideSub, setPhase, goChoice, start,
 } from './sim.js';
@@ -151,11 +151,6 @@ async function bgLoop() {
     await bgTruck.driveTo(11.8, 7, { maxSpeed: 1.4, accel: 0.7, decel: 1.0 });
     await waitReal(3.0);
   }
-}
-
-// Wachten in echte tijd voor achtergrondanimaties (los van de sequencer).
-function waitReal(s) {
-  return new Promise((r) => setTimeout(r, s * 1000));
 }
 
 function seatMarco() {

@@ -8,7 +8,7 @@ import { canvas, std, softShadow, mulberry32, pedestrianIcon } from './world.js'
 // deur naar de hal in de rechtermuur. De speler zit aan de middelste tafel (aan de kant
 // z > 0) en kijkt naar -z: tegenover hem zitten Marco, Dennis en de lege stoel voor Tomasz.
 
-export const ROOM = { x0: -6, x1: 6, z0: -6.5, z1: 2.5, h: 3.0 };
+const ROOM = { x0: -6, x1: 6, z0: -6.5, z1: 2.5, h: 3.0 };
 export const TABLE_H = 0.75;
 const SEAT_GAP = 0.62; // van het midden van de tafel tot het bekken van wie zit
 
@@ -21,12 +21,12 @@ const TABLES = [
   { x: 3.5, z: -0.6, len: 1.6, far: ['e10', 'bg3'], near: ['e11', 'e12'] },
 ];
 
-// Zitplaats: plek van het bekken en kijkrichting (0 = naar +z), plus de tafel.
+// Zitplaats: plek van het bekken en kijkrichting (0 = naar +z).
 export const SEATS = {};
 for (const t of TABLES) {
   const xs = t.len > 1.8 ? [-0.75, 0, 0.75] : [-0.4, 0.4];
-  t.far.forEach((n, i) => (SEATS[n] = { pos: new THREE.Vector3(t.x + xs[i], 0, t.z - SEAT_GAP), yaw: 0, table: t }));
-  t.near.forEach((n, i) => (SEATS[n] = { pos: new THREE.Vector3(t.x + xs[i], 0, t.z + SEAT_GAP), yaw: Math.PI, table: t }));
+  t.far.forEach((n, i) => (SEATS[n] = { pos: new THREE.Vector3(t.x + xs[i], 0, t.z - SEAT_GAP), yaw: 0 }));
+  t.near.forEach((n, i) => (SEATS[n] = { pos: new THREE.Vector3(t.x + xs[i], 0, t.z + SEAT_GAP), yaw: Math.PI }));
 }
 
 // Punt rond een zitplaats: lx naar links van wie daar zit, lz naar voren (naar de tafel).
@@ -698,14 +698,18 @@ export function buildCanteen(scene, renderer) {
   const fIn = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.55), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf4f8ff, emissiveIntensity: 0.9 }));
   fIn.position.set(0, 1.05, 0.332);
   fridge.add(fIn);
+  // Blikjes en flesjes op vier planken (één getekende vorm, 24 keer).
   const drinkCols = [0xd02525, 0x2f8fd0, 0xf0a020, 0x3aa35a, 0xe8e8e8];
-  for (let sh = 0; sh < 4; sh++) {
-    for (let k = 0; k < 6; k++) {
-      const d = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.15, 10), std(drinkCols[(k + sh) % 5], 0.35));
-      d.position.set(-0.24 + k * 0.095, 0.42 + sh * 0.38, 0.3);
-      fridge.add(d);
-    }
+  const drinks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.028, 0.028, 0.15, 10), std(0xffffff, 0.35), 24);
+  const dm = new THREE.Matrix4();
+  const dc = new THREE.Color();
+  for (let i = 0; i < 24; i++) {
+    const sh = Math.floor(i / 6);
+    const k = i % 6;
+    drinks.setMatrixAt(i, dm.makeTranslation(-0.24 + k * 0.095, 0.42 + sh * 0.38, 0.3));
+    drinks.setColorAt(i, dc.setHex(drinkCols[(k + sh) % 5]));
   }
+  fridge.add(drinks);
   const fGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 1.7), mGlass);
   fGlass.position.set(0, 1.05, 0.334);
   fridge.add(fGlass);

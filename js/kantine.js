@@ -5,7 +5,7 @@ import { buildCanteen, canteenLights, makeTray, SEATS, SPOTS, seatPoint, TABLE_H
 import { UI, LINES, CHOICES, OUTCOMES } from './i18n-kantine.js';
 import { CANTEEN_CHOICE_ICON } from './icons.js';
 import {
-  V, renderer, scene, rig, audio, S, simT, later, wait, tween, guard, ease, shortAngle,
+  V, renderer, scene, rig, audio, S, simT, later, waitReal, wait, tween, guard, ease, shortAngle,
   look, lookAtFn, lookDir, snapLook, flinch, playerHead, playerChest, say, playerSays,
   stopVoice, hideSub, setPhase, goChoice, start,
 } from './sim.js';
@@ -118,11 +118,6 @@ function groupLook(people, dy) {
     for (const p of people) v.add(p.headWorld(_c));
     return v.multiplyScalar(1 / people.length).add(_c.set(0, -dy, 0));
   };
-}
-
-// Wachten in echte tijd voor de achtergrond (los van de sequencer).
-function waitReal(s) {
-  return new Promise((r) => setTimeout(r, s * 1000));
 }
 
 // Na een clip die één keer speelt weer terug naar de gewone houding.
@@ -379,7 +374,7 @@ function resetScene(state) {
     p.surprise = 0;
     p.lookTarget = null;
     p.torsoFollow = 0.2;
-    p.root.visible = true;
+    p.setHands('relaxed');
   }
   sitAt(marco, 'marco', 'sitTable');
   sitAt(dennis, 'dennis', 'sitTable2');
@@ -604,7 +599,10 @@ async function branchB(id) {
     dennis.chuckle(1.6, 0.6);
     tomasz.mood = { sad: 0.7 };
   });
-  later(id, 1.2, () => (marco.lookTarget = tablePoint('marco', 0, 0.4)));
+  later(id, 1.2, () => {
+    marco.lookTarget = tablePoint('marco', 0, 0.4);
+    marco.sitClip = 'sitTableNervous'; // Marco zit er ongemakkelijk bij
+  });
   await playerSays(id, 'B');
 
   // "Zie je wel! Hij snapt het."
@@ -768,7 +766,7 @@ function update(dt, wdt) {
   updateTray();
   canteen.update(dt, simT);
   for (const { p, b } of blobs) {
-    const show = p.root.visible && p.seat < 0.5;
+    const show = p.seat < 0.5;
     b.visible = show;
     if (show) b.position.set(p.root.position.x, 0.006, p.root.position.z);
   }
@@ -782,6 +780,7 @@ start({
   lipsync: 'models/lipsync_kantine.json',
   audioDir: 'audio/kantine/',
   eye: EYE,
+  seatedVR: true,
   person: (who) => PEOPLE[who](),
   build: makeCast,
   reset: resetScene,

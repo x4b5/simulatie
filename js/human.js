@@ -1037,8 +1037,5 @@ function shortAngle(d) {
 }
 
 function turnTowards(cur, target, maxStep) {
-  let d = target - cur;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return cur + THREE.MathUtils.clamp(d, -maxStep, maxStep);
+  return cur + THREE.MathUtils.clamp(shortAngle(target - cur), -maxStep, maxStep);
 }

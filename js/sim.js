@@ -121,6 +121,10 @@ export function later(id, s, fn) {
     if (id === runId) fn();
   });
 }
+// Wachten in echte tijd, voor achtergrondanimaties die los van de tijdlijn doorlopen.
+export function waitReal(s) {
+  return new Promise((r) => setTimeout(r, s * 1000));
+}
 export const ease = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
 export function shortAngle(d) {
   while (d > Math.PI) d -= Math.PI * 2;
@@ -717,15 +721,22 @@ async function startVR() {
   }
 }
 
+// Zittende oefening in VR: het hoofd op zithoogte zetten, of je nu staat of zit.
+let vrLift = 0;
+let vrMeasure = 0;
 renderer.xr.addEventListener('sessionstart', () => {
   // Kijkrichting van de speler overnemen als basisrichting.
   rig.rotation.y = look.yaw;
+  vrLift = 0;
+  vrMeasure = scn.seatedVR ? 3 : 0; // na een paar beelden is de hoofdpositie bekend
   if (S.sub) renderSub();
   if (S.phase === 'choice') renderChoice();
   if (S.phase === 'reflect') renderReflection();
 });
 renderer.xr.addEventListener('sessionend', () => {
   rig.rotation.set(0, 0, 0);
+  vrLift = 0;
+  rig.position.y = 0;
   camera.position.set(0, eye, 0);
   vrui.clearPanel();
   vrui.hideSubtitle();
@@ -943,6 +954,13 @@ function loop() {
   const wdt = dt * S.worldScale;
   renderer.toneMappingExposure += (S.exposureTarget - renderer.toneMappingExposure) * (1 - Math.exp(-3 * dt));
 
+  if (renderer.xr.isPresenting) {
+    if (vrMeasure && --vrMeasure === 0) {
+      camera.getWorldPosition(camPos);
+      vrLift = eye - (camPos.y - rig.position.y);
+    }
+    rig.position.y = vrLift;
+  }
   updatePlayer(dt);
   scn.update(dt, wdt);
   updateCamera(dt);
@@ -957,7 +975,7 @@ function loop() {
 // ------------------------------------------------------------------
 // scenario: {
 //   texts: { UI, LINES, CHOICES, OUTCOMES }, choiceIcon, subColors, lineEmo,
-//   lipsync: url, audioDir: map met stemopnames, eye: ooghoogte (m),
+//   lipsync: url, audioDir: map met stemopnames, eye: ooghoogte (m), seatedVR: speler zit,
 //   person(who), build(), reset(state), intro(id), onChoice(), branch(id, key),
 //   update(dt, wdt), setupAudio(), updateAudio(dt, camPos), debug: extra testhaken }
 export async function start(scenario) {

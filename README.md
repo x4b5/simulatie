@@ -12,6 +12,9 @@ boos. De speler kiest uit drie reacties en ziet wat er daarna gebeurt.
   lipsync op basis van het stemvolume.
 - **Taal:** Nederlands altijd in beeld, met optionele vertaling eronder
   (Engels, Arabisch, Pools, Turks, Oekraïens).
+- **Voor laaggeletterden:** korte zinnen (niveau A2), bij elke stap een pictogram,
+  ondertitels met één zin tegelijk, en elk antwoord kun je eerst beluisteren
+  (knop *Luister*). Na de keuze hoor je jezelf het antwoord hardop zeggen.
 - **Apparaten:** laptop/pc, tablet/telefoon (slepen om rond te kijken), digibord
   (grote knoppen, toetsen 1-2-3) en VR-bril via WebXR.
 
@@ -30,8 +33,9 @@ Keuze (tijd staat stil)
    ├─ B "Ik moest even snel naar dock 3. Ik keek heus wel uit." → blijft geïrriteerd
    └─ C "Doe normaal, man. Schreeuw niet zo tegen me!"     → escaleert, teamleider Sandra grijpt in
    ▼
-Nabespreking ── wat gebeurde er, waarom, tip, denkvraag (geen punten)
-                 → "Probeer een andere reactie" of "Opnieuw vanaf het begin"
+Nabespreking ── 4 kaartjes, één tegelijk: wat gebeurt er (oog), waarom (lampje),
+                 tip + "zo kun je het zeggen" (ballon), denkvraag (vraagteken). Geen punten.
+                 → "Kies een ander antwoord" of "Opnieuw beginnen"
 ```
 
 Er is bewust geen goed/fout-score. Na het zien van alle drie de reacties
@@ -77,6 +81,8 @@ Tip voor in de klas: speel het op het digibord en laat de groep eerst stemmen
 | Wat | Waar |
 | --- | --- |
 | Alle teksten, vertalingen en de nabespreking | `js/i18n.js` |
+| Pictogrammen | `js/icons.js` |
+| Hoe sterk gezicht en gebaren zijn (0 = neutraal, 1 = vol) | `EXPRESSION` in `js/human.js` |
 | Volgorde, timing en gebaren per zin | `js/main.js` (functies `runIntro`, `branchA/B/C`) |
 | Magazijn (stellingen, borden, vloermarkering) | `js/world.js` |
 | Personages (animaties, kijken, wijzen, gezicht, lipsync) | `js/human.js` |
@@ -117,12 +123,16 @@ analyser voor lipsync), WebXR. Geen buildstap: gewone ES-modules.
 
 De personages (Marco, Sandra en de collega op de achtergrond) en hun animaties komen uit
 [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) (MIT-licentie, zie
-`models/LICENSE-Rocketbox.md`). ### Lipsync en gezicht
+`models/LICENSE-Rocketbox.md`).
+
+### Lipsync en gezicht
 
 ```
 mp3 ─► ElevenLabs Scribe (woorden + tijden) ─► tools/lipsync.py ─► models/lipsync.json
          Nederlandse klankregels: ch/g, sch, ij/ei, ui, oe, eu, ie, aa/ee/oo, ng/nk, p/b/m …
 ```
+
+De stem van de speler (`audio/pA.mp3` t/m `pC.mp3`) klinkt dichtbij en zonder galm, als je eigen stem.
 
 Elke klinker wordt op de luidste plek van zijn lettergreep gelegd (gemeten luidheid per 10 ms,
 `tools/envelope.json`). Tijdens het afspelen (`js/human.js`) lopen de lippen ~50 ms voor op het

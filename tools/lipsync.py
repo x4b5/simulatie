@@ -9,6 +9,7 @@ Per regel:
   s: [[t, sterkte], ...]                 nadruk (hoofdletters, uitroepen, lange klinkers)
   b: [[t, duur], ...]                    adempauzes tussen zinsdelen
   e: [0..99, ...]                        luidheid per 20 ms (uit tools/envelope.json)
+  w: [[begin, eind, woord], ...]         woorden voor meelezende ondertitels
 Gebruik: python3 tools/lipsync.py
 """
 import json
@@ -169,7 +170,8 @@ def build(entry, env=None):
             t += sd
         prev_end = e
     vis.sort(key=lambda k: k[0])
-    out = {'dur': entry['dur'], 'v': vis, 's': stress, 'b': breaths}
+    out = {'dur': entry['dur'], 'v': vis, 's': stress, 'b': breaths,
+           'w': [[w['s'], w['e'], w['w']] for w in words]}
     if env:
         # Luidheid per 20 ms (0..99), absoluut geschaald: stuurt kaak en sluiten bij stilte.
         scale = env['max'] / REF_RMS

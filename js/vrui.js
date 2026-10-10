@@ -258,6 +258,8 @@ export class VRUI {
   }
 
   _activate(b) {
+    // Na een keuze eerst wegkijken, anders klikt staren op dezelfde plek meteen de volgende knop.
+    this.needLeave = true;
     const fn = b.userData.onSelect;
     if (fn) fn();
   }
@@ -286,7 +288,11 @@ export class VRUI {
     }
     this.camera.getWorldPosition(o);
     this.camera.getWorldDirection(d);
-    const g = this._hit(o, d);
+    let g = this._hit(o, d);
+    if (this.needLeave) {
+      if (g) g = null;
+      else this.needLeave = false;
+    }
     if (g) hovered.add(g);
     if (g && g === this.gazeHover) this.dwellT += dt;
     else this.dwellT = 0;

@@ -15,6 +15,7 @@
   --walk: #2f8a4c;
   --walk-bright: #5fd48b;
   --sandra: #ff8a3d;
+  --tomasz: #7cc4ff;
   --calm: #3fbf73;
   --tense: #f2a900;
   --escalated: #e5483a;
@@ -92,7 +93,7 @@ body[data-phase="reflect"] #scene { filter: saturate(0.55); }
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
 .tb-lang svg { width: 20px; height: 20px; color: var(--muted); }
-.tb-lang select { background: transparent; border: 0; padding: 4px 2px; max-width: 9.5rem; }
+.tb-lang select { background: transparent; border: 0; padding: 4px 2px; max-width: 11.5rem; }
 .tb-lang select option { background: var(--panel-solid); }
 .icon-btn {
   width: 42px; height: 42px;
@@ -202,6 +203,19 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
 .sound .ic { width: 28px; height: 28px; }
 .btn .ic { width: 26px; height: 26px; }
 .btn .ic svg { stroke-width: 4; }
+/* Link naar de andere oefening: klein, rechtsboven op het startscherm. */
+.other-ex {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 0px)); right: var(--gutter);
+  display: inline-flex; gap: 10px; align-items: center;
+  min-height: 44px; padding: 6px 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  color: var(--fg); text-decoration: none; font-size: 0.95rem;
+}
+.other-ex .ic { width: 24px; height: 24px; color: var(--signal); }
+.other-ex .t-nl { font-weight: 700; }
+.other-ex .t-tr { color: var(--muted); font-size: 0.88rem; }
+.other-ex:hover { border-color: var(--signal); }
 
 /* ---------- Scanner (HUD) ---------- */
 .hud {
@@ -259,7 +273,8 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
   font: 700 13px/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase;
   background: var(--signal); color: var(--signal-ink);
 }
-.subs[data-who="sandra"] .who { background: var(--sandra); }
+.subs[data-who="sandra"] .who, .subs[data-who="dennis"] .who { background: var(--sandra); }
+.subs[data-who="tomasz"] .who { background: var(--tomasz); }
 .subs[data-who="you"] .who { background: var(--walk-bright); }
 .subs .nl { margin: 8px 0 0; font-size: clamp(1.15rem, 2.4vw, 1.5rem); font-weight: 700; line-height: 1.35; text-wrap: pretty; }
 .subs .nl.karaoke .w { color: rgba(238, 241, 238, 0.55); transition: color 0.12s ease; border-radius: 3px; }
@@ -455,6 +470,7 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
   .hud { width: 160px; transform: rotate(-3deg) scale(0.9); transform-origin: bottom right; bottom: calc(env(safe-area-inset-bottom, 0px) + 140px); }
   .subs { bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); padding: 10px 14px 12px; }
   .tb-lang select { max-width: 6.5rem; }
+  .other-ex { position: static; justify-self: start; }
 }
 @media (max-width: 440px) {
   #tb-fs, .tb-lang svg { display: none; }

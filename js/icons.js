@@ -37,8 +37,17 @@ export const ICONS = {
   back: svg('<path d="M38 24H12M22 14L12 24l10 10"/>'),
   retry: svg('<path d="M8 24a16 16 0 1 0 5-11.6"/><path d="M8 8v8h8"/>'),
   check: svg('<path d="M10 25l9 9 19-20"/>'),
+  // Koffiekop met stoom: pauze
+  coffee: svg('<path d="M8 20h26v10a10 10 0 0 1-10 10h-6A10 10 0 0 1 8 30z"/><path d="M34 23h3a5 5 0 0 1 0 10h-4"/><path d="M15 6c-2 3 2 5 0 8M22 6c-2 3 2 5 0 8M29 6c-2 3 2 5 0 8"/>'),
+  // Lachend gezicht met dichtgeknepen ogen: grap / meelachen
+  laugh: svg('<circle cx="24" cy="24" r="18"/><path d="M14 19l4 2-4 2M34 19l-4 2 4 2"/><path d="M14 28h20a10 10 0 0 1-20 0z"/>'),
+  // Drie hoofden die kijken: iedereen kijkt naar jou
+  group: svg('<circle cx="24" cy="15" r="6"/><path d="M13 40a11 11 0 0 1 22 0"/><circle cx="9" cy="21" r="4.5"/><path d="M2 40a8 8 0 0 1 9-8"/><circle cx="39" cy="21" r="4.5"/><path d="M46 40a8 8 0 0 0-9-8"/>'),
+  // Opgestoken hand: stop, grens aangeven
+  hand: svg('<path d="M15 26V12a3 3 0 0 1 6 0v11V8a3 3 0 0 1 6 0v15V10a3 3 0 0 1 6 0v15-9a3 3 0 0 1 6 0v14c0 9-6 15-14 15h-1c-5 0-8-2-11-6l-6-8a3 3 0 0 1 5-4z"/>'),
 };
 
 // Pictogram per antwoord en per sfeer.
 export const CHOICE_ICON = { A: 'sorry', B: 'hurry', C: 'shout' };
+export const CANTEEN_CHOICE_ICON = { A: 'hand', B: 'laugh', C: 'shout' };
 export const MOOD_ICON = { calm: 'faceCalm', tense: 'faceTense', escalated: 'faceAngry' };

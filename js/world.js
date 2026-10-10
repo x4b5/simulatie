@@ -19,7 +19,7 @@ export const LAYOUT = {
 
 const rand = mulberry32(7);
 
-function mulberry32(a) {
+export function mulberry32(a) {
   return function () {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
@@ -29,7 +29,7 @@ function mulberry32(a) {
   };
 }
 
-function canvas(w, h, draw) {
+export function canvas(w, h, draw) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -40,7 +40,7 @@ function canvas(w, h, draw) {
   return t;
 }
 
-function std(color, rough = 0.8, extra = {}) {
+export function std(color, rough = 0.8, extra = {}) {
   // Minder omgevingsreflectie: anders oogt de hal vlak en uitgebleekt.
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, envMapIntensity: 0.4, ...extra });
 }
@@ -89,7 +89,7 @@ function signTexture({ w = 512, h = 256, bg = '#f2b705', fg = '#121212', text, s
   });
 }
 
-function pedestrianIcon(g, cx, cy, s, color) {
+export function pedestrianIcon(g, cx, cy, s, color) {
   g.save();
   g.translate(cx, cy);
   g.scale(s, s);

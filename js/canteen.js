@@ -412,20 +412,21 @@ export function makeTray({ food = 'stew', cup = true, bottle = false, color = 'b
   tray.castShadow = true;
   tray.receiveShadow = true;
   g.add(tray);
+  // Indeling vanuit wie aan het blad zit (+z is van hem af): bord links, bestek, kopje achteraan.
   const plate = plateMesh(food);
-  plate.position.set(-0.06, 0.016, 0.0);
+  plate.position.set(-0.08, 0.016, -0.02);
   g.add(plate);
   const cut = cutleryMesh();
-  cut.position.set(0.13, 0.016, 0.0);
+  cut.position.set(0.1, 0.016, -0.02);
   g.add(cut);
   if (cup) {
     const c = cupMesh();
-    c.position.set(0.15, 0.016, -0.1);
+    c.position.set(0.17, 0.016, 0.11);
     g.add(c);
   }
   if (bottle) {
     const b = bottleMesh();
-    b.position.set(0.15, 0.016, 0.1);
+    b.position.set(0.17, 0.016, -0.1);
     g.add(b);
   }
   return g;
@@ -998,11 +999,11 @@ export function buildCanteen(scene, renderer) {
     world.add(obj);
     return obj;
   };
-  onTable(makeTray({ food: 'bread', cup: true }), 'player', 0, 0.38);
-  onTable(makeTray({ food: 'stew', cup: false, bottle: true, color: 'grey' }), 'dennis', 0.02, 0.5, 0.05);
-  onTable(makeTray({ food: 'soup', cup: true }), 'marco', -0.03, 0.5, -0.06);
-  onTable(makeTray({ food: 'stew', cup: true, color: 'grey' }), 'bg1', 0, 0.5);
-  onTable(makeTray({ food: 'bread', cup: true }), 'bg2', 0, 0.5, 0.1);
+  onTable(makeTray({ food: 'bread', cup: true }), 'player', 0, 0.36);
+  onTable(makeTray({ food: 'stew', cup: true, color: 'grey' }), 'dennis', 0.02, 0.54, 0.05);
+  onTable(makeTray({ food: 'soup', cup: true }), 'marco', -0.03, 0.54, -0.06);
+  onTable(makeTray({ food: 'stew', cup: false, bottle: true, color: 'grey' }), 'bg1', 0, 0.54);
+  onTable(makeTray({ food: 'bread', cup: true }), 'bg2', 0, 0.54, 0.1);
   onTable(cupMesh(), 'bg3', 0.12, 0.28);
   onTable(cupMesh(0x2f6f78), 'e4', 0.1, 0.3);
   onTable(bottleMesh(), 'e8', -0.15, 0.25);

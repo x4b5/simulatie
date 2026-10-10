@@ -221,6 +221,8 @@ export class Human {
       eyeL: B('Bip01_LEye'),
       eyeR: B('Bip01_REye'),
       handL: B('Bip01_L_Hand'),
+      clavL: B('Bip01_L_Clavicle'),
+      clavR: B('Bip01_R_Clavicle'),
       handR: B('Bip01_R_Hand'),
       arm: {
         l: { up: B('Bip01_L_UpperArm'), fore: B('Bip01_L_Forearm'), hand: B('Bip01_L_Hand') },
@@ -266,6 +268,7 @@ export class Human {
     this.seatOffset = -0.5;
     this.sitClip = 'sit'; // houding als seat = 1 (bijvoorbeeld 'sitTable': handen op tafel)
     this.torsoFollow = 0; // deel van de kijkrichting dat de romp meedraait (zittend)
+    this.upright = false; // hoofd draaien zonder te kantelen (zie _look)
     this.lean = 0; // romp achterover (+) of naar voren (-), in radialen
     this._lean = 0;
     this.armPose = null; // vaste armhouding bovenop de animatie (zie ARM_POSES)
@@ -645,13 +648,25 @@ export class Human {
     if (!sp2) return;
     const side = _v.set(1, 0, 0).applyQuaternion(this.root.getWorldQuaternion(_qRoot));
     this._lean += (this.lean - this._lean) * (1 - Math.exp(-2.5 * dt));
-    const pitch = (e * 0.06 * (this.emo.shout > 0.3 ? 1.2 : 0.7) + this.laugh * 0.075) * BODY_ACCENT - br * 0.022 - this._lean;
+    const pitch = (e * 0.06 * (this.emo.shout > 0.3 ? 1.2 : 0.7) + this.laugh * 0.09) * BODY_ACCENT - br * 0.022 - this._lean;
     if (Math.abs(pitch) > 1e-4) {
       sp2.getWorldQuaternion(_q);
       _q2.setFromAxisAngle(side, pitch);
       const worldNew = _q2.multiply(_q);
       sp2.parent.getWorldQuaternion(_q3);
       sp2.quaternion.copy(_q3.invert().multiply(worldNew));
+      sp2.updateMatrixWorld(true);
+    }
+    // Lachen: schouders gaan mee omhoog op elke lachstoot.
+    if (this.laugh > 0.01 && this.bones.clavL) {
+      const fwd = _v.set(0, 0, 1).applyQuaternion(this.root.getWorldQuaternion(_qRoot));
+      for (const [bone, sign] of [[this.bones.clavL, 1], [this.bones.clavR, -1]]) {
+        bone.getWorldQuaternion(_q);
+        _q2.setFromAxisAngle(fwd, sign * this.laugh * 0.09 * BODY_ACCENT);
+        const worldNew = _q2.multiply(_q);
+        bone.parent.getWorldQuaternion(_q3);
+        bone.quaternion.copy(_q3.invert().multiply(worldNew));
+      }
       sp2.updateMatrixWorld(true);
     }
     // Korte gebaren (prikken/hakken) via de wijs-IK.
@@ -766,10 +781,19 @@ export class Human {
         const desired = _v2.copy(t).sub(_v).normalize();
         head.getWorldQuaternion(_q);
         const cur = _v3.copy(fwd).applyQuaternion(_q).normalize();
-        const ang = Math.min(cur.angleTo(desired), maxAng);
-        if (ang < 1e-3) continue;
-        const axis = _v.crossVectors(cur, desired).normalize();
-        _q2.setFromAxisAngle(axis, ang * weight * this.lookW);
+        if (this.upright) {
+          // Zoals een echt hoofd: eerst draaien om de verticale as, dan knikken; niet scheef kantelen.
+          const k = weight * this.lookW;
+          const dYaw = THREE.MathUtils.clamp(shortAngle(Math.atan2(desired.x, desired.z) - Math.atan2(cur.x, cur.z)), -maxAng, maxAng);
+          const dPitch = THREE.MathUtils.clamp(Math.asin(desired.y) - Math.asin(THREE.MathUtils.clamp(cur.y, -1, 1)), -maxAng * 0.7, maxAng * 0.7);
+          const side = _v.set(cur.x, 0, cur.z).normalize().cross(UP);
+          _q2.setFromAxisAngle(UP, dYaw * k).multiply(_q3.setFromAxisAngle(side, dPitch * k));
+        } else {
+          const ang = Math.min(cur.angleTo(desired), maxAng);
+          if (ang < 1e-3) continue;
+          const axis = _v.crossVectors(cur, desired).normalize();
+          _q2.setFromAxisAngle(axis, ang * weight * this.lookW);
+        }
         bone.getWorldQuaternion(_q);
         const worldNew = _q2.multiply(_q);
         bone.parent.getWorldQuaternion(_q3);
@@ -1004,6 +1028,12 @@ function loudAt(track, t) {
   const a0 = e[Math.min(i, e.length - 1)] || 0;
   const a1 = e[Math.min(i + 1, e.length - 1)] || 0;
   return (a0 + (a1 - a0) * (f - i)) / 99;
+}
+
+function shortAngle(d) {
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
 }
 
 function turnTowards(cur, target, maxStep) {

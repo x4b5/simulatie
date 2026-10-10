@@ -203,17 +203,19 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
 .sound .ic { width: 28px; height: 28px; }
 .btn .ic { width: 26px; height: 26px; }
 .btn .ic svg { stroke-width: 4; }
-/* Link naar de andere oefening. */
+/* Link naar de andere oefening: klein, rechtsboven op het startscherm. */
 .other-ex {
-  justify-self: start;
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 0px)); right: var(--gutter);
   display: inline-flex; gap: 10px; align-items: center;
-  min-height: 44px; padding: 4px 0;
+  min-height: 44px; padding: 6px 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
   color: var(--fg); text-decoration: none; font-size: 0.95rem;
 }
 .other-ex .ic { width: 24px; height: 24px; color: var(--signal); }
-.other-ex .t-nl { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(238, 241, 238, 0.4); }
+.other-ex .t-nl { font-weight: 700; }
 .other-ex .t-tr { color: var(--muted); font-size: 0.88rem; }
-.other-ex:hover .t-nl { color: var(--signal); text-decoration-color: var(--signal); }
+.other-ex:hover { border-color: var(--signal); }
 
 /* ---------- Scanner (HUD) ---------- */
 .hud {
@@ -468,6 +470,7 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
   .hud { width: 160px; transform: rotate(-3deg) scale(0.9); transform-origin: bottom right; bottom: calc(env(safe-area-inset-bottom, 0px) + 140px); }
   .subs { bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); padding: 10px 14px 12px; }
   .tb-lang select { max-width: 6.5rem; }
+  .other-ex { position: static; justify-self: start; }
 }
 @media (max-width: 440px) {
   #tb-fs, .tb-lang svg { display: none; }

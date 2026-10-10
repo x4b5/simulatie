@@ -58,6 +58,7 @@ async function makeCast() {
   for (const p of cast) {
     scene.add(p.root);
     p.seatOffset = 0;
+    p.upright = true;
     // Zachte contactschaduw onder wie staat of loopt.
     const b = softShadow(0.9, 0.9, 0.5, true);
     scene.add(b);
@@ -276,7 +277,7 @@ async function sitDown(id, p, name, side) {
   p.clearForced();
   await p.walkTo([[corner.x, corner.z]], 0.95);
   guard(id);
-  const spot = at(0, 0.42, TABLE_H);
+  const spot = at(0, 0.55, TABLE_H);
   p.faceTowards(spot.x, spot.z);
   await wait(0.45);
   guard(id);
@@ -525,7 +526,7 @@ function onChoice() {
   for (const p of [dennis, marco, tomasz]) p.lookTarget = playerHead;
   dennis.lean = 0.06;
   // Iets lager kijken, zodat de gezichten boven het keuzepaneel blijven.
-  lookAtFn(groupLook([dennis, marco, tomasz], 0.62), 2);
+  lookAtFn(groupLook([dennis, marco, tomasz], 0.55), 2);
 }
 
 async function runBranch(id, key) {
@@ -636,8 +637,8 @@ async function branchB(id) {
   await wait(3.2);
   guard(id);
 
-  // Marco, zacht tegen de speler.
-  dennis.lookTarget = tablePoint('dennis', 0, 0.5);
+  // Marco, zacht tegen de speler. Dennis eet verder.
+  dennis.lookTarget = tablePoint('dennis', 0, 0.85);
   dennis.mood = { smile: 0.2 };
   marco.lookTarget = headOf(tomasz);
   lookAtFn(faceOf(marco), 2.2);
@@ -704,6 +705,7 @@ async function branchC(id) {
   await tomasz.walkTo([[SPOTS.hall.x, SPOTS.hall.z]], 1.15);
   guard(id);
   swingDoor(false);
+  dennis.lookTarget = playerHead;
   lookAtFn(faceOf(dennis), 1.4);
   await wait(2.2);
   guard(id);

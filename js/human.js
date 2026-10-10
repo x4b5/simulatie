@@ -18,6 +18,16 @@ const _q3 = new THREE.Quaternion();
 const FWD = new THREE.Vector3(0, 0, 1);
 const _qRoot = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
+const _f = new THREE.Vector3();
+const _u = new THREE.Vector3();
+const _r = new THREE.Vector3();
+const _m = new THREE.Matrix4();
+const _m2 = new THREE.Matrix4();
+// Hoe ver de ogen in de oogkas mogen draaien t.o.v. het hoofd (rad): opzij, omhoog, omlaag.
+// Wat verder ligt, neemt het hoofd over; anders zie je alleen nog oogwit.
+const EYE_YAW = 0.35;
+const EYE_UP = 0.12;
+const EYE_DOWN = 0.25;
 // Hoe sterk gezichtsuitdrukkingen zijn (1 = maximaal van het model). Lager = ingetogener.
 export const EXPRESSION = 0.62;
 // Hoe sterk de procedurele lichaamsaccenten zijn bovenop de motion capture.
@@ -324,8 +334,13 @@ export class Human {
       return FWD.clone().applyQuaternion(_q.invert());
     };
     this.headFwd = local(this.bones.head);
+    this.bones.head.getWorldQuaternion(_q);
+    this.headUp = UP.clone().applyQuaternion(_q.invert());
     this.eyeFwdL = this.bones.eyeL ? local(this.bones.eyeL) : null;
     this.eyeFwdR = this.bones.eyeR ? local(this.bones.eyeR) : null;
+    // Ruststand van de ogen (recht vooruit in het hoofd). De animaties sturen de ogen niet aan,
+    // dus elk beeld beginnen we hier opnieuw; anders stapelt de oogdraaiing zich op.
+    if (this.eyeFwdL) this.eyeRest = [this.bones.eyeL.quaternion.clone(), this.bones.eyeR.quaternion.clone()];
     // Lengtes van de arm (voor wijzen).
     this.bones.arm.l.fore.getWorldPosition(_v);
     this.bones.arm.l.up.getWorldPosition(_v2);
@@ -335,6 +350,17 @@ export class Human {
       const a = this.bones.arm[s];
       a.upAxis = a.fore.position.clone().normalize();
       a.foreAxis = a.hand.position.clone().normalize();
+      // Hand: richting van de middelvinger en dwars (wijsvinger min pink), en de vingers in de
+      // ruststand (gestrekt), voor een open hand.
+      const S = s === 'l' ? 'L' : 'R';
+      const f = (n) => a.hand.getObjectByName(`Bip01_${S}_Finger${n}`);
+      if (f(2) && f(1) && f(4)) {
+        a.handAxis = f(2).position.clone().normalize();
+        a.handSide = f(1).position.clone().sub(f(4).position);
+        a.handSide.addScaledVector(a.handAxis, -a.handSide.dot(a.handAxis)).normalize();
+        a.fingers = [];
+        a.hand.traverse((b) => b !== a.hand && /Finger/.test(b.name) && a.fingers.push([b, b.quaternion.clone()]));
+      }
     }
   }
 
@@ -422,8 +448,9 @@ export class Human {
   }
 
   // Kort gebaar met een arm naar een punt (prikken, hakken), daarna terug.
-  jab(side, worldPoint, dur = 0.5) {
-    this.jabs.push({ side, p: worldPoint.clone(), t: dur });
+  // strength: hoe ver de arm meegaat (laag = losjes, hoog = echt wijzen).
+  jab(side, worldPoint, dur = 0.5, strength = 0.55) {
+    this.jabs.push({ side, p: worldPoint.clone(), t: dur, strength });
   }
 
   setAim(side, worldPoint) {
@@ -497,6 +524,9 @@ export class Human {
   }
 
   update(dt) {
+    // Stilstaande tijd: niets doen. De mixer schrijft dan geen nieuwe pose, en de procedurele
+    // lagen zouden zich anders bovenop de vorige stapelen.
+    if (!(dt > 0)) return;
     this.time += dt;
 
     // Lopen.
@@ -579,12 +609,6 @@ export class Human {
       this.root.position.z += -dx * Math.sin(yaw) + dz * Math.cos(yaw);
     }
     this._motionPrev = { m, t: a.time, x, z };
-  }
-
-  // Totale verschuiving (in wortelruimte, meters) die een clip met wortelbeweging maakt.
-  motionOffset(name) {
-    const m = this.clips[name]?.motion;
-    return m ? new THREE.Vector2(m.x[m.x.length - 1], m.z[m.z.length - 1]) : new THREE.Vector2();
   }
 
   // Loopt de tijdlijn van de huidige regel af: nadruk en adem.
@@ -696,6 +720,14 @@ export class Human {
         a.up.updateMatrixWorld(true);
         this._pointBone(a.fore, a.foreAxis, _v2.set(fore[0] * k, fore[1], fore[2]).normalize().applyQuaternion(_qRoot), w);
         a.fore.updateMatrixWorld(true);
+        if (pose[s][2] && a.handAxis) {
+          // Open hand in een vaste stand: vingers en duim gestrekt, handpalm gericht.
+          const [fing, side] = pose[s][2];
+          _f.set(fing[0] * k, fing[1], fing[2]).normalize().applyQuaternion(_qRoot);
+          _r.set(side[0] * k, side[1], side[2]).normalize().applyQuaternion(_qRoot);
+          this._orientBone(a.hand, a.handAxis, a.handSide, _f, _r, w);
+          for (const [b, rest] of a.fingers) b.quaternion.slerp(rest, w);
+        }
       }
     }
     for (const s of ['l', 'r']) {
@@ -705,9 +737,13 @@ export class Human {
       if (this.aim[s]) (this._lastAim[s] = this.aim[s]);
       const raw = this.aimW[s];
       // Zachte S-curve en minder ver bij prikgebaren: armen schieten niet meer recht.
-      const isJab = this.jabs.some((j) => j.side === s && j.p === (this.aim[s] || this._lastAim?.[s]));
-      const w = raw * raw * (3 - 2 * raw) * (isJab ? 0.55 : 0.85);
       const target = this.aim[s] || this._lastAim?.[s];
+      // Ook tijdens het terugzakken na een gebaar blijft het een gebaar (geen sprong aan het eind).
+      let jab = target && this.jabs.find((j) => j.side === s && j.p === target);
+      if (jab) (this._lastJab ||= {})[s] = jab;
+      else if (target && !this.aim[s] && this._lastJab?.[s]?.p === target) jab = this._lastJab[s];
+      const w = raw * raw * (3 - 2 * raw) * (jab ? jab.strength : 0.85);
+      const point = jab && jab.strength > 0.7; // echt wijzen: arm gestrekt, pols recht, wijsvinger
       if (w < 0.01 || !target) continue;
       const a = this.bones.arm[s];
       // Bovenarm richten.
@@ -718,10 +754,33 @@ export class Human {
       desired.normalize();
       this._pointBone(a.up, a.upAxis, desired, w);
       a.up.updateMatrixWorld(true);
-      // Onderarm gestrekt in dezelfde richting.
-      this._pointBone(a.fore, a.foreAxis, desired, w * 0.6);
+      // Onderarm in dezelfde richting (bij echt wijzen bijna gestrekt).
+      this._pointBone(a.fore, a.foreAxis, desired, w * (point ? 0.95 : 0.6));
       a.fore.updateMatrixWorld(true);
+      // Bij echt wijzen de pols recht: de hand in het verlengde van de onderarm, niet omhoog geknikt.
+      if (point && a.handAxis) {
+        a.fore.getWorldQuaternion(_q);
+        const k = raw * raw * (3 - 2 * raw);
+        this._pointBone(a.hand, a.handAxis, _v2.copy(a.foreAxis).applyQuaternion(_q).normalize(), k * 0.85);
+        // Wijsvinger gestrekt.
+        for (const [b, rest] of a.fingers) if (/Finger1\d?$/.test(b.name)) b.quaternion.slerp(rest, k * 0.9);
+      }
     }
+  }
+
+  // Draait een bot zodat zowel `axis` naar `dir` als (zo goed als kan) `side` naar `sideDir` wijst.
+  _orientBone(bone, axis, side, dir, sideDir, w) {
+    _v.crossVectors(axis, side);
+    _m.makeBasis(axis, side, _v);
+    _v2.copy(sideDir).addScaledVector(dir, -sideDir.dot(dir)).normalize();
+    _v3.crossVectors(dir, _v2);
+    _m2.makeBasis(dir, _v2, _v3);
+    // wereldstand = doelbasis × lokale basis⁻¹
+    _q2.setFromRotationMatrix(_m2.multiply(_m.transpose()));
+    bone.parent.getWorldQuaternion(_q3);
+    _q2.premultiply(_q3.invert());
+    bone.quaternion.slerp(_q2, w);
+    bone.updateMatrixWorld(true);
   }
 
   // Draait een bot zodat zijn lokale as `axis` in wereldrichting `dir` wijst (met gewicht w).
@@ -781,18 +840,22 @@ export class Human {
         const desired = _v2.copy(t).sub(_v).normalize();
         head.getWorldQuaternion(_q);
         const cur = _v3.copy(fwd).applyQuaternion(_q).normalize();
+        // Bij een grote hoek draait het hoofd verder mee, zodat de ogen binnen hun grens blijven.
+        const share = (d, eyeMax) => (bone === head ? Math.max(weight, 1 - eyeMax / Math.max(Math.abs(d), 1e-3)) : weight);
         if (this.upright) {
           // Zoals een echt hoofd: eerst draaien om de verticale as, dan knikken; niet scheef kantelen.
-          const k = weight * this.lookW;
-          const dYaw = THREE.MathUtils.clamp(shortAngle(Math.atan2(desired.x, desired.z) - Math.atan2(cur.x, cur.z)), -maxAng, maxAng);
-          const dPitch = THREE.MathUtils.clamp(Math.asin(desired.y) - Math.asin(THREE.MathUtils.clamp(cur.y, -1, 1)), -maxAng * 0.7, maxAng * 0.7);
+          const rawYaw = shortAngle(Math.atan2(desired.x, desired.z) - Math.atan2(cur.x, cur.z));
+          const rawPitch = Math.asin(desired.y) - Math.asin(THREE.MathUtils.clamp(cur.y, -1, 1));
+          const dYaw = THREE.MathUtils.clamp(rawYaw, -maxAng, maxAng) * share(rawYaw, EYE_YAW - 0.05) * this.lookW;
+          const dPitch = THREE.MathUtils.clamp(rawPitch, -maxAng * 0.7, maxAng * 0.7) * share(rawPitch, (rawPitch > 0 ? EYE_UP : EYE_DOWN) - 0.03) * this.lookW;
           const side = _v.set(cur.x, 0, cur.z).normalize().cross(UP);
-          _q2.setFromAxisAngle(UP, dYaw * k).multiply(_q3.setFromAxisAngle(side, dPitch * k));
+          _q2.setFromAxisAngle(UP, dYaw).multiply(_q3.setFromAxisAngle(side, dPitch));
         } else {
-          const ang = Math.min(cur.angleTo(desired), maxAng);
+          const raw = cur.angleTo(desired);
+          const ang = Math.min(raw, maxAng);
           if (ang < 1e-3) continue;
           const axis = _v.crossVectors(cur, desired).normalize();
-          _q2.setFromAxisAngle(axis, ang * weight * this.lookW);
+          _q2.setFromAxisAngle(axis, ang * share(raw, EYE_YAW - 0.05) * this.lookW);
         }
         bone.getWorldQuaternion(_q);
         const worldNew = _q2.multiply(_q);
@@ -846,25 +909,36 @@ export class Human {
       this.saccT = 0.35 + Math.random() * (this.anger > 0.6 ? 2.2 : 1.4);
     }
     this.sacc.lerp(this.saccTarget, 1 - Math.exp(-40 * dt));
-    // Ogen maken oogcontact.
-    if (t && this.eyeFwdL) {
-      for (const [eye, fwd] of [[this.bones.eyeL, this.eyeFwdL], [this.bones.eyeR, this.eyeFwdR]]) {
-        eye.updateMatrixWorld(true);
-        eye.getWorldPosition(_v);
-        const desired = _v2.copy(t).sub(_v).normalize();
-        // Oogsprongetjes en wegkijken bovenop het doel.
-        const right = _v3.crossVectors(desired, UP).normalize();
-        desired.addScaledVector(right, this.sacc.x + gx).addScaledVector(UP, this.sacc.y + gy).normalize();
-        eye.getWorldQuaternion(_q);
-        const cur = _v3.copy(fwd).applyQuaternion(_q).normalize();
-        const ang = Math.min(cur.angleTo(desired), 0.5);
-        if (ang < 1e-3) continue;
-        const axis = _v.crossVectors(cur, desired).normalize();
-        _q2.setFromAxisAngle(axis, ang * this.lookW);
-        const worldNew = _q2.multiply(_q);
-        eye.parent.getWorldQuaternion(_q3);
-        eye.quaternion.copy(_q3.invert().multiply(worldNew));
-      }
+    // Ogen maken oogcontact, gemeten vanuit de kijkrichting van het hoofd (vooruit, omhoog, opzij).
+    if (!this.eyeRest) return;
+    head.getWorldQuaternion(_q);
+    const F = _f.copy(this.headFwd).applyQuaternion(_q).normalize();
+    const U = _u.copy(this.headUp).applyQuaternion(_q);
+    U.addScaledVector(F, -U.dot(F)).normalize();
+    const R = _r.crossVectors(U, F);
+    const eyes = [[this.bones.eyeL, this.eyeFwdL], [this.bones.eyeR, this.eyeFwdR]];
+    for (let i = 0; i < 2; i++) {
+      const [eye, fwd] = eyes[i];
+      eye.quaternion.copy(this.eyeRest[i]);
+      if (!t || this.lookW < 0.01) continue;
+      eye.updateMatrixWorld(true);
+      eye.getWorldPosition(_v);
+      const desired = _v2.copy(t).sub(_v).normalize();
+      // Oogsprongetjes en wegkijken bovenop het doel.
+      const right = _v3.crossVectors(desired, UP).normalize();
+      desired.addScaledVector(right, this.sacc.x + gx).addScaledVector(UP, this.sacc.y + gy).normalize();
+      // Draaien binnen de oogkas, apart begrensd opzij en omhoog/omlaag.
+      const yaw = THREE.MathUtils.clamp(Math.atan2(desired.dot(R), desired.dot(F)), -EYE_YAW, EYE_YAW) * this.lookW;
+      const pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(desired.dot(U), -1, 1)), -EYE_DOWN, EYE_UP) * this.lookW;
+      const dir = _v2.copy(F).multiplyScalar(Math.cos(pitch) * Math.cos(yaw))
+        .addScaledVector(R, Math.cos(pitch) * Math.sin(yaw))
+        .addScaledVector(U, Math.sin(pitch));
+      eye.getWorldQuaternion(_q);
+      const cur = _v3.copy(fwd).applyQuaternion(_q).normalize();
+      _q2.setFromUnitVectors(cur, dir);
+      const worldNew = _q2.multiply(_q);
+      eye.parent.getWorldQuaternion(_q3);
+      eye.quaternion.copy(_q3.invert().multiply(worldNew));
     }
   }
 
@@ -1015,8 +1089,12 @@ const ARM_POSES = {
   tray: { l: [[0.16, -1, 0.22], [-0.2, 0.05, 1]], r: [[0.16, -1, 0.22], [-0.2, 0.05, 1]] },
   // Armen over elkaar: onderarmen gekruist voor de borst (links iets hoger).
   crossed: { l: [[0.3, -1, 0.42], [-1, 0.22, 0.32]], r: [[0.3, -1, 0.38], [-1, 0.08, 0.42]] },
-  // Sussen: handen voor het lichaam, iets omhoog ("ho, rustig").
-  calm: { l: [[0.35, -0.65, 0.7], [-0.15, 0.45, 1]], r: [[0.35, -0.65, 0.7], [-0.15, 0.45, 1]] },
+  // Sussen: open handen voor de borst omhoog, handpalmen naar voren ("ho, rustig").
+  // Derde element: [richting vingers, richting duimkant] van de hand.
+  calm: {
+    l: [[0.4, -0.75, 0.5], [-0.1, 0.8, 0.6], [[0, 1, 0.2], [-1, 0, 0.1]]],
+    r: [[0.4, -0.75, 0.5], [-0.1, 0.8, 0.6], [[0, 1, 0.2], [-1, 0, 0.1]]],
+  },
 };
 
 // Luidheid van de opname (0..~1.2) op tijdstip t, uit de lipsync-tijdlijn (per 20 ms).

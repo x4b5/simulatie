@@ -68,7 +68,7 @@ function floorPlane(w, d, mat, x, z, y = 0.004) {
 
 const FONT = '"Barlow Condensed", "Arial Narrow", Arial, sans-serif';
 
-export function signTexture({ w = 512, h = 256, bg = '#f2b705', fg = '#121212', text, sub, size = 150, border = null }) {
+function signTexture({ w = 512, h = 256, bg = '#f2b705', fg = '#121212', text, sub, size = 150, border = null }) {
   return canvas(w, h, (g) => {
     g.fillStyle = bg;
     g.fillRect(0, 0, w, h);

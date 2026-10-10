@@ -25,11 +25,11 @@ export const UI = {
   },
   l2: {
     nl: 'Een collega maakt een grap over Tomasz.',
-    en: 'A colleague makes a joke about Tomasz.',
-    ar: 'زميل يمزح على توماش.',
-    pl: 'Kolega żartuje z Tomasza.',
-    tr: 'Bir iş arkadaşı Tomasz hakkında şaka yapar.',
-    uk: 'Колега жартує з Томаша.',
+    en: 'A colleague makes a joke about how Tomasz speaks Dutch.',
+    ar: 'زميل يمزح على طريقة كلام توماش بالهولندية.',
+    pl: 'Kolega żartuje z tego, jak Tomasz mówi po niderlandzku.',
+    tr: "Bir iş arkadaşı, Tomasz'ın Felemenkçe konuşmasıyla şaka yapar.",
+    uk: 'Колега жартує з того, як Томаш говорить нідерландською.',
   },
   l3: {
     nl: 'Iedereen kijkt naar jou. Wat zeg jij?',
@@ -112,7 +112,7 @@ export const LINES = {
     text: {
       nl: 'Haha. Toch? Zeg nou zelf!',
       en: 'Haha. Right? Come on, admit it!',
-      ar: 'هاها. صح؟ قلها بنفسك!',
+      ar: 'هاها. صح؟ اعترف!',
       pl: 'Haha. Prawda? No powiedz sam!',
       tr: 'Haha. Değil mi? Sen de söyle!',
       uk: 'Хаха. Хіба ні? Ну скажи сам!',
@@ -254,7 +254,7 @@ export const CHOICES = {
     nl: 'Haha… ja.',
     en: 'Haha… yeah.',
     ar: 'هاها… نعم.',
-    pl: 'Haha… no.',
+    pl: 'Haha… no tak.',
     tr: 'Haha… evet.',
     uk: 'Хаха… так.',
   },
@@ -363,7 +363,7 @@ export const OUTCOMES = {
   C: {
     mood: 'escalated',
     moodLabel: BASE_OUTCOMES.C.moodLabel,
-    title: { nl: 'Je scheldt terug', en: 'You insult him back', ar: 'تردّ بالشتم', pl: 'Obrażasz go', tr: 'Sen de hakaret edersin', uk: 'Ти ображаєш у відповідь' },
+    title: { nl: 'Je scheldt terug', en: 'You insult him back', ar: 'تردّ بالشتم', pl: 'Odpowiadasz obelgą', tr: 'Sen de hakaret edersin', uk: 'Ти ображаєш у відповідь' },
     what: {
       nl: 'Dennis wordt boos. Er komt ruzie. Tomasz gaat weg.',
       en: 'Dennis gets angry. There is a fight. Tomasz leaves.',

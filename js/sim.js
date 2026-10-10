@@ -16,7 +16,7 @@ import { ICONS, MOOD_ICON } from './icons.js';
 // ------------------------------------------------------------------
 export const $ = (s) => document.querySelector(s);
 export const V = (x, z, y = 0) => new THREE.Vector3(x, y, z);
-export const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Alleen voor testen: grotere tijdstap toestaan via ?dtmax=0.2
 const DT_MAX = Number(new URLSearchParams(location.search).get('dtmax')) || 0.05;
 
@@ -39,7 +39,7 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 export const camera = new THREE.PerspectiveCamera(68, 1, 0.05, 140);
 // Zacht vullicht vanuit de kijkrichting: gezichten blijven leesbaar, ook in de schaduw.
-export const faceFill = new THREE.SpotLight(0xfff1e2, 4.5, 5, 0.6, 1, 2);
+const faceFill = new THREE.SpotLight(0xfff1e2, 4.5, 5, 0.6, 1, 2);
 faceFill.position.set(0, 0.15, 0);
 faceFill.target.position.set(0, 0, -1);
 camera.add(faceFill, faceFill.target);
@@ -48,7 +48,7 @@ rig.add(camera);
 scene.add(rig);
 
 export const audio = new AudioEngine();
-export const vrui = new VRUI(renderer, scene, camera);
+const vrui = new VRUI(renderer, scene, camera);
 vrui.attachControllers(rig);
 
 // Het scenario (haken en teksten), gezet door start().
@@ -106,7 +106,7 @@ function flushPending() {
   untils = [];
   all.forEach((w) => w.res());
 }
-export async function run(fn) {
+async function run(fn) {
   const id = ++runId;
   flushPending();
   try {
@@ -114,6 +114,13 @@ export async function run(fn) {
   } catch (e) {
     if (e !== ABORT) console.error(e);
   }
+}
+// Een stuk tijdlijn dat los meeloopt (niet meteen afgewacht): afbreken bij een herstart is
+// normaal en wordt hier afgevangen, zodat het nooit onafgehandeld blijft.
+export function detach(promise) {
+  return promise.catch((e) => {
+    if (e !== ABORT) console.error(e);
+  });
 }
 // Voert fn uit na s seconden, tenzij de tijdlijn intussen is afgebroken.
 export function later(id, s, fn) {
@@ -298,12 +305,12 @@ function renderSub() {
     // Er staat steeds maar één zin in beeld (minder tekst tegelijk).
     let sent = 0;
     nlEl.replaceChildren(
-      ...words.map(([, , w]) => {
+      ...words.map(([, , w], i) => {
         const sp = document.createElement('span');
         sp.className = 'w';
         sp.dataset.s = sent;
         sp.textContent = w + ' ';
-        if (/[.!?…]["”]?$/.test(w)) sent++;
+        if (/[.!?…]["”]?$/.test(w) && !runsOn(w, words[i + 1]?.[2])) sent++;
         return sp;
       }),
     );
@@ -321,7 +328,7 @@ function renderSub() {
   subEl.hidden = false;
   if (words) {
     // De vertaling ook per zin, als het aantal zinnen gelijk is.
-    const nlS = sentences(nl);
+    const nlS = sentences(nl, true);
     const trS = other ? sentences(other) : [];
     subParts = { nl: nlS, tr: trS.length === nlS.length ? trS : null, other, who: sub.who, whoNl };
     showSentence(0);
@@ -333,8 +340,17 @@ function renderSub() {
 
 let subParts = null;
 let subSentence = -1;
-function sentences(text) {
-  return (text.match(/[^.!?…؟]+[.!?…؟]+["”»]?\s*|[^.!?…؟]+$/g) || [text]).map((t) => t.trim()).filter(Boolean);
+// Aarzelen ("Een… oei") loopt door in dezelfde zin: na het weglatingsteken volgt een kleine letter.
+const runsOn = (w, next) => /(…|\.\.\.)["”»]?$/.test(w) && /^[^\p{L}]*\p{Ll}/u.test(next || '');
+function sentences(text, joinRunOn = false) {
+  const parts = (text.match(/[^.!?…؟]+[.!?…؟]+["”»]?\s*|[^.!?…؟]+$/g) || [text]).map((t) => t.trim()).filter(Boolean);
+  if (!joinRunOn) return parts;
+  const out = [];
+  for (const p of parts) {
+    if (out.length && runsOn(out[out.length - 1], p)) out[out.length - 1] += ' ' + p;
+    else out.push(p);
+  }
+  return out;
 }
 function showSentence(n) {
   if (!subParts || n === subSentence) return;
@@ -984,7 +1000,7 @@ export async function start(scenario) {
   eye = scenario.eye ?? 1.65;
   camera.position.set(0, eye, 0);
   window.__sim = Object.defineProperties(
-    { S, pick, skipIntro, restart, retry, stepCard, previewChoice, rig, camera, look },
+    { S, pick, skipIntro, restart, retry, stepCard, previewChoice, rig, camera, look, vrui },
     { simT: { get: () => simT }, ...Object.getOwnPropertyDescriptors(scenario.debug || {}) },
   );
 

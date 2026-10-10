@@ -5,7 +5,7 @@ import { buildCanteen, canteenLights, makeTray, SEATS, SPOTS, seatPoint, TABLE_H
 import { UI, LINES, CHOICES, OUTCOMES } from './i18n-kantine.js';
 import { CANTEEN_CHOICE_ICON } from './icons.js';
 import {
-  V, renderer, scene, rig, audio, S, simT, later, waitReal, wait, tween, guard, ease, shortAngle,
+  V, renderer, scene, rig, audio, S, simT, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
   look, lookAtFn, lookDir, snapLook, flinch, playerHead, playerChest, say, playerSays,
   stopVoice, hideSub, setPhase, goChoice, start,
 } from './sim.js';
@@ -261,6 +261,14 @@ async function placeTray(id, p, spot, yaw) {
 // ------------------------------------------------------------------
 // Gaan zitten en opstaan
 // ------------------------------------------------------------------
+// Naar een punt toe draaien en wachten tot dat (ongeveer) gelukt is.
+async function turnTo(id, p, pt) {
+  p.faceTowards(pt.x, pt.z);
+  const t0 = simT;
+  await until(() => Math.abs(shortAngle(p.root.rotation.y - p.faceYaw)) < 0.2 || simT - t0 > 1.5);
+  guard(id);
+}
+
 // Aan tafel gaan zitten: naast de tafelhoek staan, dienblad neerzetten, stoel naar achteren
 // trekken, voor de stoel gaan staan, gaan zitten (motion capture: het lichaam zakt 46 cm naar
 // achteren op de stoel) en de stoel aanschuiven. side: aan welke kant (1 = links van de stoel).
@@ -273,16 +281,16 @@ async function sitDown(id, p, name, side) {
   await p.walkTo([[corner.x, corner.z]], 0.95);
   guard(id);
   const spot = at(0, 0.55, TABLE_H);
-  p.faceTowards(spot.x, spot.z);
-  await wait(0.45);
+  await turnTo(id, p, spot);
+  await wait(0.2);
   guard(id);
   await placeTray(id, p, spot, s.yaw);
 
-  // Stoel naar achteren trekken.
+  // Stoel naar achteren trekken: eerst omdraaien en naar de stoel kijken.
   const back = at(side * 0.16, -0.27, 0.82);
-  p.faceTowards(back.x, back.z);
-  await wait(0.3);
-  guard(id);
+  const gaze = p.lookTarget;
+  p.lookTarget = back.clone().setY(0.6);
+  await turnTo(id, p, back);
   p.jab(side > 0 ? 'l' : 'r', back, 0.9);
   await wait(0.35);
   guard(id);
@@ -291,6 +299,7 @@ async function sitDown(id, p, name, side) {
   const c1 = at(0, -0.47);
   await tween(0.5, (k) => chair.position.lerpVectors(c0, c1, ease(k)));
   guard(id);
+  p.lookTarget = gaze;
 
   // Tussen stoel en tafel gaan staan, met de rug naar de stoel.
   const front = at(0, 0.04);
@@ -500,6 +509,8 @@ async function runIntro(id) {
     [4.4, () => (dennis.lookTarget = headOf(tomasz))],
   ]);
   dennis.lean = 0.1;
+  // Marco grinnikt mee: de blik volgt de spreker.
+  lookAtFn(faceOf(marco), 3);
   await say(id, 'ml', [[0.0, () => (marco.lookTarget = tablePoint('marco', 0, 0.4))]]);
 
   // Dennis draait zich naar de speler en zoekt bijval.
@@ -622,13 +633,13 @@ async function branchB(id) {
   await say(id, 'b2', [[1.3, () => (tomasz.lookTarget = playerHead)]]);
   tomasz.clearForced();
   tomasz.lookTarget = null;
-  const leave = (async () => {
+  const leave = detach((async () => {
     await tomasz.walkTo([[1.7, -1.9], [2.25, -3.1]], 0.95);
     guard(id);
     await sitDown(id, tomasz, 'alone', -1);
     tomasz.mood = { sad: 0.6 };
     tomasz.lookTarget = tablePoint('alone', 0, 0.4);
-  })();
+  })());
   dennis.lookTarget = headOf(tomasz);
   later(id, 1.0, () => fidget(dennis, 'sitTableShrug'));
   later(id, 1.6, () => dennis.chuckle(1.0, 0.4));
@@ -641,7 +652,7 @@ async function branchB(id) {
   marco.lookTarget = headOf(tomasz);
   lookAtFn(faceOf(marco), 2.2);
   await say(id, 'b3', [[1.1, () => (marco.lookTarget = playerHead)]]);
-  await leave.catch(() => {});
+  await leave;
   guard(id);
   // Tot slot: Tomasz zit alleen aan een andere tafel.
   lookAtFn(faceOf(tomasz), 1.6);
@@ -666,10 +677,11 @@ async function branchC(id) {
   dennis.setHands('angry');
 
   // "Wat zeg jij? Het was een GRAPJE!"
+  // Prikgebaar: echt naar de speler wijzen, niet losjes omhoog.
   await say(id, 'c1', [
-    [0.0, () => dennis.setHands('shout')],
-    [0.45, () => dennis.jab('r', playerChest(new THREE.Vector3()), 0.6)],
-    [1.85, () => dennis.jab('r', playerChest(new THREE.Vector3()), 0.55)],
+    [0.0, () => dennis.setHands('firm')],
+    [0.4, () => dennis.jab('r', playerChest(new THREE.Vector3()), 0.95, 0.85)],
+    [1.8, () => dennis.jab('r', playerChest(new THREE.Vector3()), 0.85, 0.85)],
   ]);
   dennis.setHands('angry');
 

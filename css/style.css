@@ -93,7 +93,7 @@ body[data-phase="reflect"] #scene { filter: saturate(0.55); }
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
 .tb-lang svg { width: 20px; height: 20px; color: var(--muted); }
-.tb-lang select { background: transparent; border: 0; padding: 4px 2px; max-width: 9.5rem; }
+.tb-lang select { background: transparent; border: 0; padding: 4px 2px; max-width: 11.5rem; }
 .tb-lang select option { background: var(--panel-solid); }
 .icon-btn {
   width: 42px; height: 42px;

@@ -214,8 +214,8 @@ motion capture "gaan zitten".
 
 De animaties zijn gebakken naar een compact binair formaat
 (`models/anim_*.bin`, 24 fps, 16-bit rotaties); `js/human.js` leest dat in. `anim_m` en `anim_f`
-zijn de basisset, `anim_k` bevat de kantine-animaties (aan tafel zitten, gaan zitten op een stoel,
-opstaan, verdrietig of zenuwachtig luisteren). Bij gaan zitten en opstaan is de verplaatsing van
-het lichaam bewaard (wortelbeweging), zodat iemand echt op de stoel terechtkomt. Kijken, wijzen,
-knikken, knipperen, boosheid (ARKit/FACS-blendshapes) en lipsync (visemen) worden
+zijn de basisset (daarin ook opstaan), `anim_k` bevat de kantine-animaties (aan tafel zitten,
+gaan zitten op een stoel, verdrietig of zenuwachtig luisteren). Bij gaan zitten op de stoel is de
+verplaatsing van het lichaam bewaard (wortelbeweging), zodat iemand echt op de stoel terechtkomt.
+Kijken, wijzen, knikken, knipperen, boosheid (ARKit/FACS-blendshapes) en lipsync (visemen) worden
 in realtime bovenop de animaties berekend. De stemmen zijn gemaakt met ElevenLabs.

@@ -6,6 +6,7 @@ import { Forklift, FORK_TIP } from './forklift.js';
 import { AudioEngine } from './audio.js';
 import { VRUI } from './vrui.js';
 import { LANGS, UI, LINES, CHOICES, OUTCOMES, pair, langDir } from './i18n.js';
+import { ICONS, CHOICE_ICON, MOOD_ICON } from './icons.js';
 
 // ------------------------------------------------------------------
 // Basis
@@ -54,6 +55,11 @@ sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 
 const camera = new THREE.PerspectiveCamera(68, 1, 0.05, 140);
+// Zacht vullicht vanuit de kijkrichting: gezichten blijven leesbaar, ook in de schaduw van de kooi.
+const faceFill = new THREE.SpotLight(0xfff1e2, 4.5, 5, 0.6, 1, 2);
+faceFill.position.set(0, 0.15, 0);
+faceFill.target.position.set(0, 0, -1);
+camera.add(faceFill, faceFill.target);
 const rig = new THREE.Group();
 rig.add(camera);
 camera.position.set(0, EYE, 0);
@@ -414,8 +420,8 @@ const LINE_EMO = {
   m1: { shout: 1 },
   m2: { shout: 0.55 },
   m3: { shout: 0.15, worry: 0.5 },
-  a1: { worry: 0.45 },
-  a2: { smile: 0.3 },
+  a1: { worry: 0.3 },
+  a2: { smile: 0.2 },
   b1: { sarcasm: 1, shout: 0.3 },
   b2: { shout: 0.35 },
   c1: { shout: 1 },
@@ -443,6 +449,7 @@ async function say(id, key, cues = []) {
   const track = LIPSYNC[key];
   if (track) person.speak(track, clock, LINE_EMO[key], level);
   else person.talk = live ? () => audio.features(v.analyser) : fakeTalk();
+  S.subClock = clock;
   for (const [t, fn] of cues) {
     wait(t).then(() => {
       if (id === runId) fn();
@@ -461,10 +468,14 @@ function chopPoint(p) {
   return p.root.position.clone().addScaledVector(f, 0.7).setY(0.75);
 }
 
+// De speler zegt het gekozen antwoord hardop (eigen stem: dichtbij, niet ruimtelijk).
 async function playerSays(id, key) {
   showSub({ who: 'you', choice: key });
+  stopVoice();
+  voice = audio.ready && selfOut ? audio.voice(`p${key}`, selfOut) : null;
   const words = CHOICES[key].nl.split(/\s+/).length;
-  await wait(Math.max(2.4, words * 0.42 + 0.6));
+  const dur = voice ? voice.duration + 0.35 : Math.max(2.4, words * 0.42 + 0.6);
+  await wait(dur);
   guard(id);
   hideSub();
 }
@@ -479,6 +490,7 @@ function showSub(sub) {
 }
 function hideSub() {
   S.sub = null;
+  S.subClock = null;
   subEl.hidden = true;
   vrui.hideSubtitle();
 }
@@ -490,14 +502,62 @@ function renderSub() {
   const [whoNl] = speakerLabel(sub.who);
   subEl.dataset.who = sub.who;
   subEl.querySelector('.who').textContent = whoNl;
-  subEl.querySelector('.nl').textContent = nl;
+  const nlEl = subEl.querySelector('.nl');
+  const words = sub.key && LIPSYNC[sub.key]?.w;
+  if (words) {
+    // Elk woord apart, zodat het meelicht op het moment dat het uitgesproken wordt.
+    // Er staat steeds maar één zin in beeld (minder tekst tegelijk).
+    let sent = 0;
+    nlEl.replaceChildren(
+      ...words.map(([, , w], i) => {
+        const sp = document.createElement('span');
+        sp.className = 'w';
+        sp.dataset.s = sent;
+        sp.textContent = w + ' ';
+        if (/[.!?…]["”]?$/.test(w)) sent++;
+        return sp;
+      }),
+    );
+    nlEl.classList.add('karaoke');
+    karaokeIdx = -2;
+    subSentence = -1;
+  } else {
+    nlEl.textContent = nl;
+    nlEl.classList.remove('karaoke');
+  }
   const tr = subEl.querySelector('.tr');
   tr.textContent = other || '';
   tr.hidden = !other;
   tr.dir = langDir(S.lang);
   subEl.hidden = false;
-  const colors = { marco: '#f2c500', sandra: '#ff8a3d', you: '#5fd48b' };
-  vrui.showSubtitle(whoNl, colors[sub.who], nl, other, langDir(S.lang));
+  if (words) {
+    // De vertaling ook per zin, als het aantal zinnen gelijk is.
+    const nlS = sentences(nl);
+    const trS = other ? sentences(other) : [];
+    subParts = { nl: nlS, tr: trS.length === nlS.length ? trS : null, other, who: sub.who, whoNl };
+    showSentence(0);
+  } else {
+    subParts = null;
+    vrui.showSubtitle(whoNl, SUB_COLORS[sub.who], nl, other, langDir(S.lang));
+  }
+}
+
+const SUB_COLORS = { marco: '#f2c500', sandra: '#ff8a3d', you: '#5fd48b' };
+let subParts = null;
+let subSentence = -1;
+function sentences(text) {
+  return (text.match(/[^.!?…؟]+[.!?…؟]+["”»]?\s*|[^.!?…؟]+$/g) || [text]).map((t) => t.trim()).filter(Boolean);
+}
+function showSentence(n) {
+  if (!subParts || n === subSentence) return;
+  subSentence = n;
+  for (const sp of subEl.querySelectorAll('.nl .w')) sp.classList.toggle('off', Number(sp.dataset.s) !== n);
+  const tr = subParts.tr ? subParts.tr[Math.min(n, subParts.tr.length - 1)] : subParts.other;
+  const trEl = subEl.querySelector('.tr');
+  trEl.textContent = tr || '';
+  trEl.hidden = !tr;
+  const nlText = subParts.nl[Math.min(n, subParts.nl.length - 1)];
+  vrui.showSubtitle(subParts.whoNl, SUB_COLORS[subParts.who], nlText, tr, langDir(S.lang));
 }
 
 // ------------------------------------------------------------------
@@ -745,7 +805,7 @@ async function branchA(id) {
   guard(id);
   await say(id, 'a1', [
     [0.0, () => marco.setHands('calm')],
-    [3.3, () => {
+    [2.1, () => {
       marco.setHands('relaxed');
       marco.angerTarget = 0.12;
     }],
@@ -753,7 +813,7 @@ async function branchA(id) {
   await say(id, 'a2', [
     [0.0, () => marco.setHands('calm')],
     [0.9, () => marco.setAim('l', WALKWAY)],
-    [1.65, () => {
+    [1.85, () => {
       marco.setAim('l', null);
       marco.nod();
     }],
@@ -876,7 +936,7 @@ const choiceEl = $('#choice');
 function renderChoice() {
   if (S.phase !== 'choice') return;
   const [title, titleTr] = pair(UI.prompt, S.lang);
-  const [sub, subTr] = pair(UI.promptSub, S.lang);
+  const [sub, subTr] = pair(UI.pickOne, S.lang);
   choiceEl.querySelector('.c-title').textContent = title;
   setTr(choiceEl.querySelector('.c-title-tr'), titleTr);
   choiceEl.querySelector('.c-sub').textContent = sub;
@@ -884,30 +944,69 @@ function renderChoice() {
   const list = choiceEl.querySelector('.c-list');
   list.replaceChildren();
   const items = [];
+  const listenNl = pair(UI.listen, S.lang)[0];
   for (const key of ['A', 'B', 'C']) {
     const [nl, other] = pair(CHOICES[key], S.lang);
+    const wrap = document.createElement('div');
+    wrap.className = 'opt-wrap';
     const b = document.createElement('button');
     b.className = 'opt';
     b.type = 'button';
     b.id = `opt-${key}`;
-    b.innerHTML = `<span class="opt-key" aria-hidden="true">${key}</span><span class="opt-body"><span class="opt-nl"></span><span class="opt-tr"></span></span>`;
+    b.innerHTML = `<span class="opt-pic" aria-hidden="true"><span class="opt-icon ic">${ICONS[CHOICE_ICON[key]]}</span><span class="opt-key">${key}</span></span><span class="opt-body"><span class="opt-nl"></span><span class="opt-tr"></span></span>`;
     b.querySelector('.opt-nl').textContent = nl;
     setTr(b.querySelector('.opt-tr'), other);
     if (S.tried.has(key)) {
       const t = document.createElement('span');
       t.className = 'opt-tried';
-      t.textContent = pair(UI.tried, S.lang)[0];
+      t.innerHTML = `<span class="ic">${ICONS.check}</span>`;
+      t.append(pair(UI.tried, S.lang)[0]);
       b.querySelector('.opt-body').appendChild(t);
     }
     b.addEventListener('click', () => pick(key));
-    list.appendChild(b);
+    // Luisteren: het antwoord hardop horen, zonder het al te kiezen.
+    const l = document.createElement('button');
+    l.className = 'opt-listen';
+    l.type = 'button';
+    l.dataset.key = key;
+    l.innerHTML = `<span class="ic">${ICONS.speaker}</span><span class="lbl"></span>`;
+    l.querySelector('.lbl').textContent = listenNl;
+    l.setAttribute('aria-label', `${listenNl}: ${nl}`);
+    l.addEventListener('click', (e) => {
+      e.stopPropagation();
+      previewChoice(key);
+    });
+    wrap.append(b, l);
+    list.appendChild(wrap);
     items.push({ letter: key, nl, other, tried: S.tried.has(key), onSelect: () => pick(key) });
   }
   choiceEl.hidden = false;
   vrui.showChoices(title, sub, pair(UI.vrHint, S.lang)[0], items, langDir(S.lang), pair(UI.tried, S.lang)[0]);
 }
 
+// Voorbeeld van een antwoord afspelen (eigen stem), los van de keuze.
+let preview = null;
+async function previewChoice(key) {
+  await ensureAudio();
+  stopPreview();
+  const v = audio.ready && selfOut ? audio.voice(`p${key}`, selfOut) : null;
+  if (!v) return;
+  preview = v;
+  const btn = choiceEl.querySelector(`.opt-listen[data-key="${key}"]`);
+  btn?.classList.add('playing');
+  v.ended.then(() => {
+    btn?.classList.remove('playing');
+    if (preview === v) preview = null;
+  });
+}
+function stopPreview() {
+  if (preview) preview.stop();
+  preview = null;
+  for (const b of choiceEl.querySelectorAll('.opt-listen.playing')) b.classList.remove('playing');
+}
+
 function hideChoice() {
+  stopPreview();
   choiceEl.hidden = true;
   vrui.clearPanel();
 }
@@ -921,63 +1020,116 @@ function setTr(el, text) {
 const reflEl = $('#reflect');
 function showReflection(key) {
   S.outcome = key;
+  S.card = 0;
   setPhase('reflect');
   hideSub();
   renderReflection();
+}
+
+// Nabespreking als kaartjes: steeds één stap (pictogram + 1 of 2 korte zinnen).
+function reflectionCards(key) {
+  const o = OUTCOMES[key];
+  return [
+    { icon: 'eye', head: UI.what, body: o.what },
+    { icon: 'bulb', head: UI.why, body: o.why },
+    { icon: 'tip', head: UI.tip, body: o.tip, quote: o.quote },
+    { icon: 'question', head: UI.q, body: o.q, last: true },
+  ];
 }
 
 function renderReflection() {
   const key = S.outcome;
   if (!key) return;
   const o = OUTCOMES[key];
+  const cards = reflectionCards(key);
+  const n = Math.min(S.card || 0, cards.length - 1);
+  const c = cards[n];
   reflEl.dataset.mood = o.mood;
+  const q = (sel) => reflEl.querySelector(sel);
   const set = (sel, entry) => {
     const [nl, other] = pair(entry, S.lang);
-    reflEl.querySelector(sel).textContent = nl;
-    setTr(reflEl.querySelector(sel + '-tr'), other);
+    q(sel).textContent = nl;
+    setTr(q(sel + '-tr'), other);
   };
-  reflEl.querySelector('.r-choice').textContent = `${key} · “${CHOICES[key].nl}”`;
-  set('.r-mood', o.moodLabel);
+  q('.r-face').innerHTML = ICONS[MOOD_ICON[o.mood]];
+  q('.r-mood').textContent = pair(o.moodLabel, S.lang)[0];
   set('.r-title', o.title);
-  set('.r-what-h', UI.what);
-  set('.r-what', o.what);
-  set('.r-why-h', UI.why);
-  set('.r-why', o.why);
-  set('.r-tip-h', UI.tip);
-  set('.r-tip', o.tip);
-  set('.r-q-h', UI.q);
-  set('.r-q', o.q);
-  const all = S.tried.size === 3;
-  const allEl = reflEl.querySelector('.r-all');
-  allEl.hidden = !all;
+
+  const card = q('.r-card');
+  card.style.animation = 'none';
+  void card.offsetWidth;
+  card.style.animation = '';
+  q('.r-card-ic').innerHTML = ICONS[c.icon];
+  set('.r-card-h', c.head);
+  const [bNl, bTr] = pair(c.body, S.lang);
+  q('.r-card-body').textContent = bNl;
+  setTr(q('.r-card-tr'), bTr);
+  const quote = q('.r-quote');
+  quote.hidden = !c.quote;
+  if (c.quote) {
+    const [qNl, qTr] = pair(c.quote, S.lang);
+    q('.r-quote-h').textContent = pair(UI.sayIt, S.lang)[0];
+    q('.r-quote-nl').textContent = qNl;
+    setTr(q('.r-quote-tr'), qTr);
+  }
+  const all = !!c.last && S.tried.size === 3;
+  q('.r-all').hidden = !all;
   if (all) {
     const [nl, other] = pair(UI.allTried, S.lang);
-    allEl.querySelector('.r-all-nl').textContent = nl;
-    setTr(allEl.querySelector('.r-all-tr'), other);
+    q('.r-all-nl').textContent = nl;
+    setTr(q('.r-all-tr'), other);
   }
+
+  q('.r-dots').replaceChildren(
+    ...cards.map((_, i) => {
+      const d = document.createElement('i');
+      if (i === n) d.className = 'on';
+      return d;
+    }),
+  );
+  $('#r-back').disabled = n === 0;
+  $('#r-back .b-nl').textContent = pair(UI.back, S.lang)[0];
+  $('#r-next').hidden = !!c.last;
+  $('#r-next .b-nl').textContent = pair(UI.next, S.lang)[0];
+  q('.r-actions').hidden = !c.last;
   $('#btn-retry .b-nl').textContent = pair(UI.retry, S.lang)[0];
   setTr($('#btn-retry .b-tr'), pair(UI.retry, S.lang)[1]);
   $('#btn-restart .b-nl').textContent = pair(UI.restart, S.lang)[0];
   setTr($('#btn-restart .b-tr'), pair(UI.restart, S.lang)[1]);
   reflEl.hidden = false;
-  reflEl.scrollTop = 0;
 
+  // VR: dezelfde kaart op een paneel, met vorige/volgende.
   const dir = langDir(S.lang);
   const tr = (e) => pair(e, S.lang)[1];
   const moodColor = { calm: '#3fbf73', tense: '#f2a900', escalated: '#e5483a' }[o.mood];
   const sec = [
-    { text: pair(o.moodLabel, S.lang)[0].toUpperCase(), size: 28, weight: 700, head: true, color: moodColor, gap: 0 },
-    { text: pair(o.title, S.lang)[0], size: 60, weight: 800, head: true, color: '#ffffff', gap: 4 },
+    { text: `${pair(o.moodLabel, S.lang)[0].toUpperCase()} · ${n + 1}/${cards.length}`, size: 28, weight: 700, head: true, color: moodColor, gap: 0 },
+    { text: pair(o.title, S.lang)[0], size: 56, weight: 800, head: true, color: '#ffffff', gap: 4 },
+    { text: pair(c.head, S.lang)[0], size: 34, weight: 700, head: true, color: '#f2c500', gap: 26 },
+    { text: c.body.nl, size: 40, weight: 700, gap: 8 },
   ];
-  for (const [h, b] of [[UI.what, o.what], [UI.why, o.why], [UI.tip, o.tip], [UI.q, o.q]]) {
-    sec.push({ text: pair(h, S.lang)[0], size: 30, weight: 700, head: true, color: '#f2c500', gap: 22 });
-    sec.push({ text: b.nl, size: 32, gap: 4 });
-    if (tr(b)) sec.push({ text: tr(b), size: 26, color: '#aab3ae', gap: 6, dir });
+  if (tr(c.body)) sec.push({ text: tr(c.body), size: 28, color: '#aab3ae', gap: 8, dir });
+  if (c.quote) {
+    sec.push({ text: pair(UI.sayIt, S.lang)[0], size: 28, color: '#5fd48b', gap: 22 });
+    sec.push({ text: `“${c.quote.nl}”`, size: 40, weight: 700, color: '#d9ffe6', gap: 4 });
+    if (tr(c.quote)) sec.push({ text: tr(c.quote), size: 28, color: '#aab3ae', gap: 6, dir });
   }
-  vrui.showReflection(sec, [
-    { label: pair(UI.retry, S.lang)[0], primary: true, onSelect: retry },
-    { label: pair(UI.restart, S.lang)[0], onSelect: restart },
-  ], moodColor, dir);
+  if (all) sec.push({ text: pair(UI.allTried, S.lang)[0], size: 30, color: '#5fd48b', gap: 22 });
+  const buttons = c.last
+    ? [
+        { label: pair(UI.retry, S.lang)[0], primary: true, onSelect: retry },
+        { label: pair(UI.restart, S.lang)[0], onSelect: restart },
+      ]
+    : [{ label: `${pair(UI.next, S.lang)[0]}  →`, primary: true, onSelect: () => stepCard(1) }];
+  if (n > 0) buttons.unshift({ label: `←  ${pair(UI.back, S.lang)[0]}`, onSelect: () => stepCard(-1) });
+  vrui.showReflection(sec, buttons, moodColor, dir);
+}
+
+function stepCard(d) {
+  if (S.phase !== 'reflect') return;
+  const max = reflectionCards(S.outcome).length - 1;
+  S.card = Math.max(0, Math.min(max, (S.card || 0) + d));
+  renderReflection();
 }
 
 function hideReflection() {
@@ -1013,6 +1165,27 @@ function skipIntro() {
   });
 }
 
+// Markeert in de ondertitel het woord dat nu wordt uitgesproken.
+let karaokeIdx = -2;
+function tickKaraoke() {
+  const words = S.sub?.key && LIPSYNC[S.sub.key]?.w;
+  if (!words || !S.subClock) {
+    karaokeIdx = -2;
+    return;
+  }
+  const t = S.subClock();
+  let idx = -1;
+  for (let i = 0; i < words.length; i++) if (words[i][0] - 0.03 <= t) idx = i;
+  if (idx === karaokeIdx) return;
+  karaokeIdx = idx;
+  const spans = subEl.querySelectorAll('.nl .w');
+  if (idx >= 0 && spans[idx]) showSentence(Number(spans[idx].dataset.s));
+  spans.forEach((sp, i) => {
+    sp.classList.toggle('said', i < idx || (i === idx && t > words[i][1]));
+    sp.classList.toggle('now', i === idx && t <= words[i][1] + 0.12);
+  });
+}
+
 // Scanner-scherm tijdens de intro.
 const hudEl = $('#hud');
 let hudT0 = 0;
@@ -1042,6 +1215,9 @@ function renderStatic() {
     if (trEl) setTr(trEl, other);
   }
   for (const sel of document.querySelectorAll('select.lang')) sel.value = L;
+  for (const el of document.querySelectorAll('[data-icon]')) {
+    if (!el.firstChild) el.innerHTML = ICONS[el.dataset.icon] || '';
+  }
 }
 
 function setLang(code) {
@@ -1075,7 +1251,8 @@ function fillLangSelects() {
 // ------------------------------------------------------------------
 // Start, VR, knoppen
 // ------------------------------------------------------------------
-const VOICE_IDS = Object.keys(LINES);
+const VOICE_IDS = [...Object.keys(LINES), 'pA', 'pB', 'pC'];
+let selfOut = null;
 let audioPrefetch = null;
 
 async function ensureAudio() {
@@ -1099,6 +1276,9 @@ function setupAudioGraph() {
   bgTruck.engineSnd = audio.engine(bgTruck.panner);
   bgTruck.beeperSnd = audio.beeper(bgTruck.panner);
   marco.onStep = () => audio.step(0.3, marco.panner);
+  marco.breathSnd = audio.breather(marco.panner);
+  selfOut = audio.selfOut();
+  sandra.breathSnd = audio.breather(sandra.panner);
   sandra.onStep = () => audio.step(0.25, sandra.panner);
   distantPanner = audio.spatial({ ref: 3, rolloff: 1 });
 }
@@ -1155,6 +1335,8 @@ function bindUI() {
   $('#btn-vr').addEventListener('click', startVR);
   $('#btn-retry').addEventListener('click', retry);
   $('#btn-restart').addEventListener('click', restart);
+  $('#r-next').addEventListener('click', () => stepCard(1));
+  $('#r-back').addEventListener('click', () => stepCard(-1));
   $('#skip').addEventListener('click', skipIntro);
   $('#tb-restart').addEventListener('click', () => {
     if (S.phase === 'title' || S.phase === 'loading') return;
@@ -1171,6 +1353,10 @@ function bindUI() {
     else document.exitFullscreen?.().catch(() => {});
   });
   window.addEventListener('keydown', (e) => {
+    if (S.phase === 'reflect' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      stepCard(e.key === 'ArrowRight' ? 1 : -1);
+      return;
+    }
     if (S.phase !== 'choice') return;
     const k = { 1: 'A', 2: 'B', 3: 'C', a: 'A', b: 'B', c: 'C' }[e.key.toLowerCase()];
     if (k) pick(k);
@@ -1291,8 +1477,15 @@ function updateAudio(dt) {
   camera.getWorldDirection(camFwd);
   camUp.set(0, 1, 0).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
   audio.updateListener(camPos, camFwd, camUp);
-  audio.place(marco.panner, marco.headWorld(tmp));
-  audio.place(sandra.panner, sandra.headWorld(tmp));
+  for (const p of [marco, sandra]) {
+    p.headWorld(tmp);
+    audio.place(p.panner, tmp);
+    // Hoe verder weg, hoe meer galm van de hal (direct geluid vs. reflecties).
+    const dist = tmp.distanceTo(camPos);
+    audio.setWet(p.panner, THREE.MathUtils.clamp(0.25 + dist * 0.09, 0.25, 0.95));
+    // Hoorbaar ademen: inademen voor een zin, hijgen na het schreeuwen.
+    p.breathSnd?.set(p.breath * 0.5 + p.pant * (0.55 + 0.45 * Math.sin(p.time * 7.5)), Math.sin(p.time * 7.5) > 0);
+  }
   for (const t of [fl, bgTruck]) {
     audio.place(t.panner, t.root.localToWorld(tmp.set(0, 1.0, 0)));
     t.engineSnd.set(t.speed, t.on);
@@ -1383,6 +1576,7 @@ function loop() {
   updateAudio(dt);
   vrui.update(dt);
   tickHud();
+  tickKaraoke();
   renderer.render(scene, camera);
 }
 
@@ -1423,4 +1617,4 @@ async function boot() {
 boot();
 
 // Voor geautomatiseerde tests.
-window.__sim = { S, pick, skipIntro, restart, retry, rig, camera, look, get fl() { return fl; }, get marco() { return marco; }, get simT() { return simT; } };
+window.__sim = { S, pick, skipIntro, restart, retry, stepCard, previewChoice, rig, camera, look, get fl() { return fl; }, get marco() { return marco; }, get simT() { return simT; } };

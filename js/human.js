@@ -16,6 +16,10 @@ const _q3 = new THREE.Quaternion();
 const FWD = new THREE.Vector3(0, 0, 1);
 const _qRoot = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
+// Hoe sterk gezichtsuitdrukkingen zijn (1 = maximaal van het model). Lager = ingetogener.
+export const EXPRESSION = 0.62;
+// Hoe sterk de procedurele lichaamsaccenten zijn bovenop de motion capture.
+const BODY_ACCENT = 0.6;
 
 const animCache = new Map();
 
@@ -317,13 +321,17 @@ export class Human {
       a.timeScale = timeScale;
       return;
     }
-    a.reset();
-    a.timeScale = timeScale;
     const once = this.forced && this.forced.name === name && !this.forced.loop;
+    // Een clip die nog aan het uitfaden is niet herstarten: dan loopt de beweging gewoon door.
+    const stillRunning = a.isRunning() && a.getEffectiveWeight() > 0.05 && !once;
+    if (!stillRunning) {
+      a.reset();
+      // Begin ergens willekeurig in lange clips, zodat herhaling minder opvalt.
+      if (a.getClip().duration > 10) a.time = Math.random() * (a.getClip().duration - 4);
+    }
+    a.timeScale = timeScale;
     a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     a.clampWhenFinished = once;
-    // Begin ergens willekeurig in lange clips, zodat herhaling minder opvalt.
-    if (a.getClip().duration > 10) a.time = Math.random() * (a.getClip().duration - 4);
     a.enabled = true;
     a.setEffectiveWeight(1);
     a.play();
@@ -499,7 +507,7 @@ export class Human {
     this.turning = !moving && this.turnHold > 0;
 
     const [clip, ts] = this._chooseClip(moving);
-    this._play(clip, moving || this.turning ? 0.3 : 0.5, ts);
+    this._play(clip, moving || this.turning ? 0.45 : this.forced ? 0.5 : 0.95, ts);
     this.model.position.y = this.seat > 0.5 ? this.seatOffset * this.seat * 100 * 0.01 : 0;
     this.mixer.update(dt);
     this.root.updateMatrixWorld(true);
@@ -517,7 +525,8 @@ export class Human {
     const sp = this.speech;
     const emoT = this.emoTarget || { shout: 0, smile: 0, worry: 0, sarcasm: 0 };
     for (const k of Object.keys(this.emo)) this.emo[k] += ((emoT[k] || 0) - this.emo[k]) * (1 - Math.exp(-3 * dt));
-    this.emph = Math.max(0, this.emph - dt * 2.6);
+    this.emphTarget = Math.max(0, (this.emphTarget || 0) - dt * 1.6);
+    this.emph += (this.emphTarget - this.emph) * (1 - Math.exp(-7 * dt));
     if (this.breathT > 0) {
       this.breathT -= dt;
       this.breath += (1 - this.breath) * (1 - Math.exp(-10 * dt));
@@ -528,7 +537,7 @@ export class Human {
     const tr = sp.track;
     while (sp.si < tr.s.length && tr.s[sp.si][0] <= t) {
       const st = tr.s[sp.si][1];
-      this.emph = Math.max(this.emph, st);
+      this.emphTarget = Math.max(this.emphTarget || 0, st);
       if (st >= 0.85 && Math.random() < 0.5) this.blink = 0.16;
       sp.si++;
     }
@@ -550,7 +559,7 @@ export class Human {
     const sp2 = this.bones.spine2;
     if (!sp2) return;
     const side = _v.set(1, 0, 0).applyQuaternion(this.root.getWorldQuaternion(_qRoot));
-    const pitch = e * 0.07 * (this.emo.shout > 0.3 ? 1.3 : 0.7) - br * 0.035;
+    const pitch = (e * 0.06 * (this.emo.shout > 0.3 ? 1.2 : 0.7)) * BODY_ACCENT - br * 0.022;
     if (Math.abs(pitch) > 1e-4) {
       sp2.getWorldQuaternion(_q);
       _q2.setFromAxisAngle(side, pitch);
@@ -573,10 +582,13 @@ export class Human {
   _aimArms(dt) {
     for (const s of ['l', 'r']) {
       const want = this.aim[s] ? 1 : 0;
-      this.aimW[s] += (want - this.aimW[s]) * (1 - Math.exp(-6 * dt));
+      this.aimW[s] += (want - this.aimW[s]) * (1 - Math.exp(-3.2 * dt));
       if (this.aim[s]) this._lastAim = this._lastAim || {};
       if (this.aim[s]) (this._lastAim[s] = this.aim[s]);
-      const w = this.aimW[s];
+      const raw = this.aimW[s];
+      // Zachte S-curve en minder ver bij prikgebaren: armen schieten niet meer recht.
+      const isJab = this.jabs.some((j) => j.side === s && j.p === (this.aim[s] || this._lastAim?.[s]));
+      const w = raw * raw * (3 - 2 * raw) * (isJab ? 0.55 : 0.85);
       const target = this.aim[s] || this._lastAim?.[s];
       if (w < 0.01 || !target) continue;
       const a = this.bones.arm[s];
@@ -589,7 +601,7 @@ export class Human {
       this._pointBone(a.up, a.upAxis, desired, w);
       a.up.updateMatrixWorld(true);
       // Onderarm gestrekt in dezelfde richting.
-      this._pointBone(a.fore, a.foreAxis, desired, w);
+      this._pointBone(a.fore, a.foreAxis, desired, w * 0.6);
       a.fore.updateMatrixWorld(true);
     }
   }
@@ -609,8 +621,13 @@ export class Human {
     let target = null;
     if (this.lookTarget) target = typeof this.lookTarget === 'function' ? this.lookTarget(new THREE.Vector3()) : this.lookTarget;
     this.lookW += ((target ? 1 : 0) - this.lookW) * (1 - Math.exp(-4 * dt));
-    if (target) this._lastLook = target.clone();
-    const t = target || this._lastLook;
+    if (target) {
+      // Het kijkdoel glijdt naar een nieuw punt, zodat het hoofd niet ineens omklapt.
+      if (!this._lookPos) this._lookPos = target.clone();
+      else this._lookPos.lerp(target, 1 - Math.exp(-4.5 * dt));
+      this._lastLook = this._lookPos.clone();
+    }
+    const t = target ? this._lookPos : this._lastLook;
     const head = this.bones.head;
     if (t && this.lookW > 0.01) {
       // Lichaam meedraaien als het doel te ver opzij is.
@@ -620,11 +637,11 @@ export class Human {
         let d = yaw - this.root.rotation.y;
         while (d > Math.PI) d -= Math.PI * 2;
         while (d < -Math.PI) d += Math.PI * 2;
-        if (Math.abs(d) > 0.7) this.root.rotation.y += Math.sign(d) * Math.min(Math.abs(d) - 0.65, 2.2 * dt);
+        if (Math.abs(d) > 0.7) this.root.rotation.y += Math.sign(d) * Math.min(Math.abs(d) - 0.65, 1.3 * dt);
       }
       for (const [bone, fwd, weight, maxAng] of [
-        [this.bones.neck, this.headFwd, 0.35, 0.5],
-        [head, this.headFwd, 0.75, 0.9],
+        [this.bones.neck, this.headFwd, 0.3, 0.45],
+        [head, this.headFwd, 0.6, 0.8],
       ]) {
         bone.updateMatrixWorld(true);
         head.getWorldPosition(_v);
@@ -646,15 +663,15 @@ export class Human {
     let yaw = 0;
     if (this.nodT > 0) {
       this.nodT -= dt;
-      pitch += Math.sin((1 - this.nodT) * 13) * 0.14 * Math.min(1, this.nodT * 3);
+      pitch += Math.sin((1 - this.nodT) * 9) * 0.08 * Math.min(1, this.nodT * 2.5);
     }
     if (this.shakeT > 0) {
       this.shakeT -= dt;
-      yaw += Math.sin((1.2 - this.shakeT) * 14) * 0.18 * Math.min(1, this.shakeT * 2.5);
+      yaw += Math.sin((1.2 - this.shakeT) * 10) * 0.1 * Math.min(1, this.shakeT * 2);
     }
     // Op nadruk: korte knik naar voren/omlaag (boos) of omhoog (rustig).
-    pitch += this.emph * this.emph * (this.anger > 0.4 ? 0.09 : -0.05);
-    if (this.speech) pitch += Math.sin(this.time * 6.3) * 0.012 + this.jaw * 0.05;
+    pitch += this.emph * this.emph * (this.anger > 0.4 ? 0.07 : -0.04) * BODY_ACCENT;
+    if (this.speech) pitch += this.jaw * 0.025;
     // Kort wegkijken (nadenken): hoofd draait een beetje mee.
     let gx = 0;
     let gy = 0;
@@ -739,10 +756,10 @@ export class Human {
     this.anger += (this.angerTarget - this.anger) * (1 - Math.exp(-2.2 * dt));
     // Schrik dooft langzaam uit en verdringt zolang de boosheid.
     this.surprise = Math.max(0, (this.surprise || 0) - dt * 0.55);
-    const SUR = this.surprise;
-    const A = this.anger * (1 - SUR * 0.85);
+    const SUR = this.surprise * EXPRESSION;
+    const A = this.anger * (1 - this.surprise * 0.85) * EXPRESSION;
     const E = this.emo;
-    const emph = this.emph;
+    const emph = this.emph * EXPRESSION;
 
     // ---- Spraak ----
     const want = {};
@@ -783,7 +800,7 @@ export class Human {
     }
     const VIS = ['sil', 'PP', 'FF', 'TH', 'DD', 'kk', 'CH', 'SS', 'nn', 'RR', 'aa', 'E', 'I', 'O', 'U'];
     // Klinkers ruimer bij luid praten en schreeuwen, medeklinkers blijven strak.
-    const vowelGain = 0.95 + 0.35 * Math.min(1, loud) + E.shout * 0.25;
+    const vowelGain = 0.78 + 0.25 * Math.min(1, loud) + E.shout * 0.12;
     for (const name of VIS) {
       let target = want[name] || 0;
       if (name === 'aa' || name === 'E' || name === 'O') target *= vowelGain;
@@ -795,7 +812,7 @@ export class Human {
     const vs = this.vis;
     // Kaak: opening van de klinker × volume; dicht bij p/b/m.
     const openness = (vs.aa || 0) * 0.55 + (vs.O || 0) * 0.38 + (vs.E || 0) * 0.3 + (vs.I || 0) * 0.14 + (vs.U || 0) * 0.16 + (vs.RR || 0) * 0.12 + (vs.kk || 0) * 0.12;
-    const jawT = speaking ? openness * (0.7 + 0.6 * Math.min(1, loud)) * (1 + E.shout * 0.45) * (1 - (vs.PP || 0) * 0.9) : 0;
+    const jawT = speaking ? openness * (0.6 + 0.45 * Math.min(1, loud)) * (1 + E.shout * 0.2) * (1 - (vs.PP || 0) * 0.9) : 0;
     const breathOpen = this.breath * 0.18 + this.pant * (0.12 + 0.06 * Math.sin(this.time * 7.5));
     this.jaw += (jawT + breathOpen - this.jaw) * (1 - Math.exp(-30 * dt));
     set('jawOpen', this.jaw + SUR * 0.3);
@@ -803,9 +820,9 @@ export class Human {
     set('lipsPart', speaking ? 0.12 + breathOpen : breathOpen * 1.2);
 
     // ---- Emotie, ook tijdens het praten ----
-    const shoutNow = E.shout * (speaking ? 0.6 + 0.4 * Math.min(1, loud) : 0.35);
-    const angryEmph = A > 0.4 ? emph : 0;
-    const calmEmph = A <= 0.4 ? emph : 0;
+    const shoutNow = E.shout * (speaking ? 0.6 + 0.4 * Math.min(1, loud) : 0.35) * EXPRESSION;
+    const angryEmph = A > 0.25 ? emph : 0;
+    const calmEmph = A <= 0.25 ? emph : 0;
     set('browDownL', A * 0.85 + angryEmph * 0.3);
     set('browDownR', A * 0.85 + angryEmph * 0.3);
     set('browLower', A * 0.55 + angryEmph * 0.25);

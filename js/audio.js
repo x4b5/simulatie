@@ -115,7 +115,65 @@ export class AudioEngine {
     const send = ctx.createGain();
     send.gain.value = wet;
     p.connect(send).connect(this.reverb);
+    p.send = send;
     return p;
+  }
+
+  // Uitgang voor de eigen stem van de speler: dichtbij, met een vleugje hal.
+  selfOut() {
+    const g = this.ctx.createGain();
+    g.gain.value = 0.85;
+    g.connect(this.master);
+    const send = this.ctx.createGain();
+    send.gain.value = 0.16;
+    g.connect(send).connect(this.reverb);
+    return g;
+  }
+
+  setWet(panner, wet) {
+    if (panner?.send) panner.send.gain.setTargetAtTime(wet, this.ctx.currentTime, 0.1);
+  }
+
+  // Ademgeluid: gefilterde ruis, harder bij uitademen (hijgen).
+  breather(dest) {
+    const ctx = this.ctx;
+    const n = this._noiseSrc();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1300;
+    bp.Q.value = 0.9;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 400;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    n.connect(bp).connect(hp).connect(g).connect(dest);
+    n.start(0, Math.random() * 2);
+    return {
+      set(level, out) {
+        const t = ctx.currentTime;
+        bp.frequency.setTargetAtTime(out ? 1100 : 1700, t, 0.08);
+        g.gain.setTargetAtTime(Math.max(0, level) * 0.05, t, 0.06);
+      },
+    };
+  }
+
+  // Omroepgong in de verte (ding-dong).
+  chime(dest) {
+    const ctx = this.ctx;
+    const t0 = ctx.currentTime;
+    [[659, 0], [523, 0.55]].forEach(([f, off]) => {
+      for (const [mul, amp] of [[1, 0.05], [2, 0.012], [3, 0.006]]) {
+        const o = this._osc('sine', f * mul);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, t0 + off);
+        g.gain.linearRampToValueAtTime(amp, t0 + off + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 1.8);
+        o.connect(g).connect(dest);
+        o.start(t0 + off);
+        o.stop(t0 + off + 1.9);
+      }
+    });
   }
 
   place(panner, v) {
@@ -434,6 +492,10 @@ export class AudioEngine {
   distantEvent(dest) {
     if (!this.ctx) return;
     const r = Math.random();
+    if (r > 0.9) {
+      this.chime(dest);
+      return;
+    }
     if (r < 0.45) {
       // pieper van een andere heftruck
       const ctx = this.ctx;

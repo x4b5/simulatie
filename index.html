@@ -52,11 +52,12 @@
     <div class="hazard" aria-hidden="true"></div>
     <p class="eyebrow" data-t="eyebrow"><span class="t-nl"></span><span class="t-tr"></span></p>
     <h1 id="start-title" data-t="title"><span class="t-nl">Bijna geraakt</span><span class="t-tr"></span></h1>
-    <div class="setting" data-t="setting"><p class="t-nl"></p><p class="t-tr"></p></div>
-    <div class="note" data-t="note">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.2v.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <div><p class="t-nl"></p><p class="t-tr"></p></div>
-    </div>
+    <ol class="story">
+      <li data-t="l1"><span class="ic" data-icon="scanner"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
+      <li data-t="l2"><span class="ic" data-icon="forklift"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
+      <li data-t="l3"><span class="ic" data-icon="angryTalk"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
+    </ol>
+    <p class="note" data-t="noteShort"><span class="ic" data-icon="safe"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></p>
     <div class="start-controls">
       <label class="field">
         <span data-t="lang"><span class="t-nl">Vertaling</span></span>
@@ -64,6 +65,7 @@
       </label>
       <div class="start-buttons">
         <button id="btn-start" class="btn primary is-loading" type="button" disabled>
+          <span class="ic" data-icon="play"></span>
           <span data-t="start"><span class="t-nl">Start de oefening</span><span class="t-tr"></span></span>
           <span class="spinner" aria-hidden="true"></span>
         </button>
@@ -73,10 +75,7 @@
         </button>
       </div>
       <p class="vr-note" id="vr-note" data-t="noVr" hidden><span class="t-nl"></span><span class="t-tr"></span></p>
-      <p class="sound" data-t="sound">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="t-nl"></span><span class="t-tr"></span>
-      </p>
+      <p class="sound" data-t="sound"><span class="ic" data-icon="speaker"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></p>
     </div>
   </div>
 </section>
@@ -112,31 +111,29 @@
 
 <section id="reflect" class="reflect" hidden aria-labelledby="r-title" data-mood="calm">
   <div class="r-strip" aria-hidden="true"></div>
-  <div class="r-inner">
-    <p class="r-mood"></p><p class="r-mood-tr"></p>
-    <h2 id="r-title" class="r-title"></h2><p class="r-title-tr"></p>
-    <p class="r-choice"></p>
-    <div class="r-sec">
-      <h3 class="r-what-h"></h3><p class="r-what-h-tr"></p>
-      <p class="r-what"></p><p class="r-what-tr"></p>
+  <header class="r-head">
+    <span class="r-face ic"></span>
+    <div>
+      <p class="r-mood"></p>
+      <h2 id="r-title" class="r-title"></h2>
+      <p class="r-title-tr"></p>
     </div>
-    <div class="r-sec">
-      <h3 class="r-why-h"></h3><p class="r-why-h-tr"></p>
-      <p class="r-why"></p><p class="r-why-tr"></p>
-    </div>
-    <div class="r-sec r-tipbox">
-      <h3 class="r-tip-h"></h3><p class="r-tip-h-tr"></p>
-      <p class="r-tip"></p><p class="r-tip-tr"></p>
-    </div>
-    <div class="r-sec r-qbox">
-      <h3 class="r-q-h"></h3><p class="r-q-h-tr"></p>
-      <p class="r-q"></p><p class="r-q-tr"></p>
-    </div>
-    <div class="r-all" hidden><p class="r-all-nl"></p><p class="r-all-tr"></p></div>
+  </header>
+  <div class="r-card" aria-live="polite">
+    <span class="r-card-ic ic"></span>
+    <h3 class="r-card-h"></h3><p class="r-card-h-tr"></p>
+    <p class="r-card-body"></p><p class="r-card-tr"></p>
+    <blockquote class="r-quote" hidden><span class="r-quote-h"></span><span class="r-quote-nl"></span><span class="r-quote-tr"></span></blockquote>
+    <div class="r-all" hidden><span class="ic" data-icon="check"></span><span><span class="r-all-nl"></span><span class="r-all-tr"></span></span></div>
   </div>
-  <div class="r-actions">
-    <button id="btn-retry" class="btn primary" type="button"><span class="b-nl"></span><span class="b-tr"></span></button>
-    <button id="btn-restart" class="btn ghost" type="button"><span class="b-nl"></span><span class="b-tr"></span></button>
+  <nav class="r-nav">
+    <button id="r-back" class="btn ghost r-arrow" type="button"><span class="ic" data-icon="back"></span><span class="sr-only b-nl"></span></button>
+    <div class="r-dots" aria-hidden="true"></div>
+    <button id="r-next" class="btn primary r-next" type="button"><span class="b-nl"></span><span class="ic" data-icon="next"></span></button>
+  </nav>
+  <div class="r-actions" hidden>
+    <button id="btn-retry" class="btn primary" type="button"><span class="ic" data-icon="retry"></span><span><span class="b-nl"></span><span class="b-tr"></span></span></button>
+    <button id="btn-restart" class="btn ghost" type="button"><span class="ic" data-icon="back"></span><span><span class="b-nl"></span><span class="b-tr"></span></span></button>
   </div>
 </section>
 

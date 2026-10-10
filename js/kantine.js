@@ -55,6 +55,10 @@ async function makeCast() {
     load('models/sandra.fbx', 'f101', 'models/anim_f'),
   ]);
   cast = [marco, dennis, tomasz, bg1, bg2, bg3, sandra];
+  // Tomasz heeft in de pauze geen gereedschap bij zich: de duimstok in zijn gordel prikte door het tafelblad.
+  tomasz.root.traverse((n) => {
+    if (n.isMesh) for (const m of [].concat(n.material)) if (/tools/i.test(m.name)) m.visible = false;
+  });
   for (const p of cast) {
     scene.add(p.root);
     p.seatOffset = 0;
@@ -676,7 +680,9 @@ async function branchC(id) {
   await standUp(id, dennis, 'dennis');
   dennis.setHands('angry');
 
-  // "Wat zeg jij? Het was een GRAPJE!"
+  // "Wat zeg jij? Het was een GRAPJE!" Marco en Tomasz kijken naar Dennis, die opeens staat.
+  marco.lookTarget = headOf(dennis);
+  tomasz.lookTarget = headOf(dennis);
   // Prikgebaar: echt naar de speler wijzen, niet losjes omhoog.
   await say(id, 'c1', [
     [0.0, () => dennis.setHands('firm')],

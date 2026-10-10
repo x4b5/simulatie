@@ -6,6 +6,8 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 // - Hoofd en ogen kijken naar een doel, arm kan naar een punt wijzen (IK bovenop de animatie)
 // - Gezichtsuitdrukking via blendshapes (ARKit/FACS): boosheid, knipperen
 // - Lipsync via visemen, gestuurd door volume en klankkleur van de stem
+// - Zitten aan tafel, wortelbeweging (gaan zitten, opstaan), vaste armhoudingen (dienblad,
+//   armen over elkaar) en lachen dat meebeweegt met de lach in de opname
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -51,6 +53,9 @@ async function loadAnimSet(base) {
         tracks.push(new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, vals));
       });
       const np = c.posBones.length;
+      // Wortelbeweging (gaan zitten, opstaan): de horizontale verschuiving bewaren in meters,
+      // zodat het personage zelf meeschuift in plaats van ter plekke te blijven.
+      const motion = c.motion ? { x: new Float32Array(c.frames), z: new Float32Array(c.frames), fps: header.fps } : null;
       c.posBones.forEach((bone, pi) => {
         const vals = new Float32Array(c.frames * 3);
         const x0 = p32[c.pOff + pi * 3];
@@ -61,10 +66,15 @@ async function loadAnimSet(base) {
           vals[f * 3] = bone === 'Bip01' ? x0 : p32[o];
           vals[f * 3 + 1] = p32[o + 1];
           vals[f * 3 + 2] = bone === 'Bip01' ? z0 : p32[o + 2];
+          if (motion && bone === 'Bip01') {
+            motion.x[f] = (p32[o] - x0) * 0.01;
+            motion.z[f] = (p32[o + 2] - z0) * 0.01;
+          }
         }
         tracks.push(new THREE.VectorKeyframeTrack(`${bone}.position`, times, vals));
       });
       clips[c.name] = new THREE.AnimationClip(c.name, c.duration, tracks);
+      if (motion) clips[c.name].motion = motion;
     }
     return clips;
   })();
@@ -146,12 +156,13 @@ function tex(url, srgb) {
 }
 
 export class Human {
+  // anims: één animatieset of een lijst sets (de clips worden samengevoegd).
   static async load({ model, code, anims, facial = true, badge = null }) {
     const manager = new THREE.LoadingManager();
     // Texturen uit het FBX-bestand negeren: we zetten zelf PBR-materialen.
     manager.setURLModifier((u) => (/\.tga$/i.test(u) ? 'data:,' : u));
-    const [obj, clips] = await Promise.all([new FBXLoader(manager).loadAsync(model), loadAnimSet(anims)]);
-    return new Human(obj, clips, { code, facial, badge });
+    const [obj, ...sets] = await Promise.all([new FBXLoader(manager).loadAsync(model), ...[].concat(anims).map(loadAnimSet)]);
+    return new Human(obj, Object.assign({}, ...sets), { code, facial, badge });
   }
 
   constructor(obj, clips, { code, facial }) {
@@ -253,6 +264,16 @@ export class Human {
     this._stepPhase = 0;
     this._lastStepSign = 0;
     this.seatOffset = -0.5;
+    this.sitClip = 'sit'; // houding als seat = 1 (bijvoorbeeld 'sitTable': handen op tafel)
+    this.torsoFollow = 0; // deel van de kijkrichting dat de romp meedraait (zittend)
+    this.lean = 0; // romp achterover (+) of naar voren (-), in radialen
+    this._lean = 0;
+    this.armPose = null; // vaste armhouding bovenop de animatie (zie ARM_POSES)
+    this.armPoseW = 0;
+    this.mood = {}; // grondstemming als hij niet praat, bijvoorbeeld { smile: 0.3 }
+    this.laugh = 0; // lachstoten (volgt het volume van de lach)
+    this.laughMood = 0; // lachend gezicht (trager)
+    this.chuckleT = 0;
     // Spraak, nadruk, adem en ogen.
     this.speech = null; // { track, clock, emo, level, si, bi }
     this.vis = {}; // huidige visemengewichten (gedempt)
@@ -262,7 +283,7 @@ export class Human {
     this.breathT = 0;
     this.pant = 0; // nahijgen na schreeuwen
     this.jaw = 0;
-    this.emo = { shout: 0, smile: 0, worry: 0, sarcasm: 0 };
+    this.emo = { shout: 0, smile: 0, worry: 0, sarcasm: 0, sad: 0 };
     this.sacc = new THREE.Vector2();
     this.saccTarget = new THREE.Vector2();
     this.saccT = 0.5;
@@ -346,8 +367,9 @@ export class Human {
 
   // Start lipsync voor een regel. clock() geeft seconden sinds de start van het geluid,
   // level() het actuele volume (of null).
+  // emo.laugh: [[van, tot], …] stukken waarin de opname lacht.
   speak(track, clock, emo = {}, level = null) {
-    this.speech = { track, clock, level, si: 0, bi: 0 };
+    this.speech = { track, clock, level, si: 0, bi: 0, laugh: emo.laugh };
     this.emoTarget = { shout: 0, smile: 0, worry: 0, sarcasm: 0, ...emo };
     if (emo.shout > 0.5) this.pant = 0;
   }
@@ -378,6 +400,17 @@ export class Human {
       this.surprise = 0.7;
       this.emph = 1;
     }
+  }
+
+  // Kort grinniken zonder geluid (dur seconden, sterkte 0..1).
+  chuckle(dur = 1.2, amp = 0.5) {
+    this.chuckleT = dur;
+    this.chuckleAmp = amp;
+  }
+
+  // Wereldpositie van een hand ('l' of 'r').
+  handWorld(side, v) {
+    return this.bones.arm[side].hand.getWorldPosition(v);
   }
 
   // Zichtbaar inademen (vóór een zin of in een pauze).
@@ -433,8 +466,8 @@ export class Human {
   }
 
   // Speelt een animatie één keer (of herhaald bij loop=true) en negeert zolang de gewone keuze.
-  playForced(name, timeScale = 1, loop = false) {
-    this.forced = { name, ts: timeScale, loop };
+  playForced(name, timeScale = 1, loop = false, fade = 0.5) {
+    this.forced = { name, ts: timeScale, loop, fade };
     const a = this.actions[name];
     return a ? a.getClip().duration / timeScale : 0;
   }
@@ -445,7 +478,7 @@ export class Human {
 
   _chooseClip(moving) {
     if (this.forced) return [this.forced.name, this.forced.ts];
-    if (this.seat > 0.5) return ['sit', 1];
+    if (this.seat > 0.5) return [this.sitClip, 1];
     if (moving) {
       const fast = this.walkSpeed > 1.45 && this.actions.walkFast;
       const name = fast ? 'walkFast' : 'walk';
@@ -507,9 +540,10 @@ export class Human {
     this.turning = !moving && this.turnHold > 0;
 
     const [clip, ts] = this._chooseClip(moving);
-    this._play(clip, moving || this.turning ? 0.45 : this.forced ? 0.5 : 0.95, ts);
+    this._play(clip, moving || this.turning ? 0.45 : this.forced ? this.forced.fade : 0.95, ts);
     this.model.position.y = this.seat > 0.5 ? this.seatOffset * this.seat * 100 * 0.01 : 0;
     this.mixer.update(dt);
+    this._rootMotion();
     this.root.updateMatrixWorld(true);
 
     // Procedurele lagen bovenop de animatie.
@@ -520,11 +554,45 @@ export class Human {
     this._face(dt);
   }
 
+  // Clips met wortelbeweging verplaatsen het hele personage (in de kijkrichting van de wortel).
+  _rootMotion() {
+    const a = this.current;
+    const m = a && this.forced?.name === a.getClip().name ? a.getClip().motion : null;
+    if (!m) {
+      this._motionPrev = null;
+      return;
+    }
+    const f = Math.min(m.x.length - 1, a.time * m.fps);
+    const i = Math.floor(f);
+    const j = Math.min(i + 1, m.x.length - 1);
+    const x = m.x[i] + (m.x[j] - m.x[i]) * (f - i);
+    const z = m.z[i] + (m.z[j] - m.z[i]) * (f - i);
+    const prev = this._motionPrev;
+    if (prev && prev.m === m && a.time >= prev.t) {
+      const dx = x - prev.x;
+      const dz = z - prev.z;
+      const yaw = this.root.rotation.y;
+      this.root.position.x += dx * Math.cos(yaw) + dz * Math.sin(yaw);
+      this.root.position.z += -dx * Math.sin(yaw) + dz * Math.cos(yaw);
+    }
+    this._motionPrev = { m, t: a.time, x, z };
+  }
+
+  // Totale verschuiving (in wortelruimte, meters) die een clip met wortelbeweging maakt.
+  motionOffset(name) {
+    const m = this.clips[name]?.motion;
+    return m ? new THREE.Vector2(m.x[m.x.length - 1], m.z[m.z.length - 1]) : new THREE.Vector2();
+  }
+
   // Loopt de tijdlijn van de huidige regel af: nadruk en adem.
   _speechClock(dt) {
     const sp = this.speech;
     const emoT = this.emoTarget || { shout: 0, smile: 0, worry: 0, sarcasm: 0 };
-    for (const k of Object.keys(this.emo)) this.emo[k] += ((emoT[k] || 0) - this.emo[k]) * (1 - Math.exp(-3 * dt));
+    for (const k of Object.keys(this.emo)) {
+      const want = Math.max(emoT[k] || 0, this.mood[k] || 0);
+      this.emo[k] += (want - this.emo[k]) * (1 - Math.exp(-3 * dt));
+    }
+    this._laughClock(dt);
     this.emphTarget = Math.max(0, (this.emphTarget || 0) - dt * 1.6);
     this.emph += (this.emphTarget - this.emph) * (1 - Math.exp(-7 * dt));
     if (this.breathT > 0) {
@@ -552,6 +620,23 @@ export class Human {
     }
   }
 
+  // Lachen: in de lachstukken van de opname volgen borst en schouders het volume van de lach
+  // (elke "ha" een stoot), het gezicht lacht mee en het hoofd gaat iets achterover.
+  _laughClock(dt) {
+    let want = 0;
+    const sp = this.speech;
+    if (sp?.laugh) {
+      const t = sp.clock();
+      if (sp.laugh.some(([a, b]) => t >= a && t <= b)) want = 0.25 + 0.75 * Math.min(1, loudAt(sp.track, t) * 1.6);
+    }
+    if (this.chuckleT > 0) {
+      this.chuckleT -= dt;
+      want = Math.max(want, this.chuckleAmp * (0.45 + 0.55 * Math.abs(Math.sin(this.time * 10.5))) * Math.min(1, this.chuckleT * 3));
+    }
+    this.laugh += (want - this.laugh) * (1 - Math.exp(-16 * dt));
+    this.laughMood += ((want > 0 ? 1 : 0) - this.laughMood) * (1 - Math.exp(-(want > 0 ? 5 : 1.6) * dt));
+  }
+
   // Ritme van het lichaam: op nadruk het hoofd en de romp naar voren, borst die ademt.
   _beatBody(dt) {
     const e = this.emph * this.emph;
@@ -559,7 +644,8 @@ export class Human {
     const sp2 = this.bones.spine2;
     if (!sp2) return;
     const side = _v.set(1, 0, 0).applyQuaternion(this.root.getWorldQuaternion(_qRoot));
-    const pitch = (e * 0.06 * (this.emo.shout > 0.3 ? 1.2 : 0.7)) * BODY_ACCENT - br * 0.022;
+    this._lean += (this.lean - this._lean) * (1 - Math.exp(-2.5 * dt));
+    const pitch = (e * 0.06 * (this.emo.shout > 0.3 ? 1.2 : 0.7) + this.laugh * 0.075) * BODY_ACCENT - br * 0.022 - this._lean;
     if (Math.abs(pitch) > 1e-4) {
       sp2.getWorldQuaternion(_q);
       _q2.setFromAxisAngle(side, pitch);
@@ -580,6 +666,23 @@ export class Human {
   }
 
   _aimArms(dt) {
+    // Vaste armhouding (dienblad, armen over elkaar …): richting van boven- en onderarm.
+    this.armPoseW += ((this.armPose ? 1 : 0) - this.armPoseW) * (1 - Math.exp(-4 * dt));
+    if (this.armPose) this._lastArmPose = this.armPose;
+    const pose = ARM_POSES[this._lastArmPose];
+    if (pose && this.armPoseW > 0.01) {
+      const w = this.armPoseW * this.armPoseW * (3 - 2 * this.armPoseW);
+      this.root.getWorldQuaternion(_qRoot);
+      for (const s of ['l', 'r']) {
+        const a = this.bones.arm[s];
+        const k = s === 'l' ? 1 : -1;
+        const [up, fore] = pose[s];
+        this._pointBone(a.up, a.upAxis, _v2.set(up[0] * k, up[1], up[2]).normalize().applyQuaternion(_qRoot), w);
+        a.up.updateMatrixWorld(true);
+        this._pointBone(a.fore, a.foreAxis, _v2.set(fore[0] * k, fore[1], fore[2]).normalize().applyQuaternion(_qRoot), w);
+        a.fore.updateMatrixWorld(true);
+      }
+    }
     for (const s of ['l', 'r']) {
       const want = this.aim[s] ? 1 : 0;
       this.aimW[s] += (want - this.aimW[s]) * (1 - Math.exp(-3.2 * dt));
@@ -629,6 +732,21 @@ export class Human {
     }
     const t = target ? this._lookPos : this._lastLook;
     const head = this.bones.head;
+    if (t && this.lookW > 0.01 && this.torsoFollow > 0) {
+      // Zittend draait de romp een stukje mee naar wie hij aankijkt.
+      const sp2 = this.bones.spine2;
+      sp2.getWorldPosition(_v);
+      this.root.getWorldQuaternion(_qRoot);
+      const fwd = _v3.set(0, 0, 1).applyQuaternion(_qRoot);
+      const d = Math.atan2(t.x - _v.x, t.z - _v.z) - Math.atan2(fwd.x, fwd.z);
+      const yaw = THREE.MathUtils.clamp(Math.atan2(Math.sin(d), Math.cos(d)), -0.9, 0.9) * this.torsoFollow * this.lookW;
+      sp2.getWorldQuaternion(_q);
+      _q2.setFromAxisAngle(UP, yaw);
+      const worldNew = _q2.multiply(_q);
+      sp2.parent.getWorldQuaternion(_q3);
+      sp2.quaternion.copy(_q3.invert().multiply(worldNew));
+      sp2.updateMatrixWorld(true);
+    }
     if (t && this.lookW > 0.01) {
       // Lichaam meedraaien als het doel te ver opzij is.
       if (!this.path.length && this.seat < 0.5 && !this.lockYaw) {
@@ -672,6 +790,8 @@ export class Human {
     // Op nadruk: korte knik naar voren/omlaag (boos) of omhoog (rustig).
     pitch += this.emph * this.emph * (this.anger > 0.4 ? 0.07 : -0.04) * BODY_ACCENT;
     if (this.speech) pitch += this.jaw * 0.025;
+    // Lachen: hoofd iets achterover en meeschokken; verdriet: hoofd iets omlaag.
+    pitch += -this.laughMood * 0.09 * BODY_ACCENT - this.laugh * 0.03 + this.emo.sad * 0.07;
     // Kort wegkijken (nadenken): hoofd draait een beetje mee.
     let gx = 0;
     let gy = 0;
@@ -773,14 +893,9 @@ export class Human {
         this._visemesAt(sp.track, t, want);
         speaking = true;
       }
-      const e = sp.track.e;
-      if (e) {
+      if (sp.track.e) {
         // Gemeten luidheid van de opname (per 20 ms), lineair geïnterpoleerd.
-        const f = Math.max(0, (t - 0.02) / 0.02);
-        const i = Math.floor(f);
-        const a0 = e[Math.min(i, e.length - 1)] || 0;
-        const a1 = e[Math.min(i + 1, e.length - 1)] || 0;
-        loud = (a0 + (a1 - a0) * (f - i)) / 99;
+        loud = loudAt(sp.track, t);
         // Stilte binnen de zin: lippen gaan dicht.
         const gate = THREE.MathUtils.smoothstep(loud, 0.025, 0.11);
         for (const k of Object.keys(want)) if (k !== 'PP') want[k] *= gate;
@@ -814,7 +929,10 @@ export class Human {
     const openness = (vs.aa || 0) * 0.55 + (vs.O || 0) * 0.38 + (vs.E || 0) * 0.3 + (vs.I || 0) * 0.14 + (vs.U || 0) * 0.16 + (vs.RR || 0) * 0.12 + (vs.kk || 0) * 0.12;
     const jawT = speaking ? openness * (0.6 + 0.45 * Math.min(1, loud)) * (1 + E.shout * 0.2) * (1 - (vs.PP || 0) * 0.9) : 0;
     const breathOpen = this.breath * 0.18 + this.pant * (0.12 + 0.06 * Math.sin(this.time * 7.5));
-    this.jaw += (jawT + breathOpen - this.jaw) * (1 - Math.exp(-30 * dt));
+    // Lachen opent de kaak op elke lachstoot.
+    const LA = this.laugh * EXPRESSION;
+    const LM = this.laughMood * EXPRESSION;
+    this.jaw += (Math.max(jawT, LA * 0.5) + breathOpen - this.jaw) * (1 - Math.exp(-30 * dt));
     set('jawOpen', this.jaw + SUR * 0.3);
     set('mouthClose', (vs.PP || 0) * 0.35);
     set('lipsPart', speaking ? 0.12 + breathOpen : breathOpen * 1.2);
@@ -826,15 +944,16 @@ export class Human {
     set('browDownL', A * 0.85 + angryEmph * 0.3);
     set('browDownR', A * 0.85 + angryEmph * 0.3);
     set('browLower', A * 0.55 + angryEmph * 0.25);
-    set('browInnerUp', Math.max(0, 0.25 - A) * 0.5 + E.worry * 0.7 + calmEmph * 0.45 + SUR * 0.8);
+    const SAD = E.sad * EXPRESSION;
+    set('browInnerUp', Math.max(0, 0.25 - A) * 0.5 + E.worry * 0.7 + calmEmph * 0.45 + SUR * 0.8 + SAD * 0.9 + LM * 0.15);
     set('browOuterUpL', calmEmph * 0.5 + E.sarcasm * 0.25 + SUR * 0.7);
     set('browOuterUpR', calmEmph * 0.5 + SUR * 0.7);
     set('sneerL', A * 0.3 + shoutNow * 0.25);
     set('sneerR', A * 0.3 + shoutNow * 0.25);
-    set('squintL', A * 0.32 + angryEmph * 0.2);
-    set('squintR', A * 0.32 + angryEmph * 0.2);
-    set('cheekSquintL', shoutNow * 0.3 + E.smile * 0.4);
-    set('cheekSquintR', shoutNow * 0.3 + E.smile * 0.4);
+    set('squintL', A * 0.32 + angryEmph * 0.2 + LM * 0.45);
+    set('squintR', A * 0.32 + angryEmph * 0.2 + LM * 0.45);
+    set('cheekSquintL', shoutNow * 0.3 + E.smile * 0.4 + LM * 0.7);
+    set('cheekSquintR', shoutNow * 0.3 + E.smile * 0.4 + LM * 0.7);
     // Tanden ontbloten bij schreeuwen, gespannen lippen als hij zwijgt.
     const vowelOpen = (vs.aa || 0) + (vs.E || 0) + (vs.I || 0);
     set('upperUpL', A * 0.18 * vowelOpen + shoutNow * 0.45);
@@ -842,13 +961,13 @@ export class Human {
     set('lipRaiser', shoutNow * 0.25);
     set('stretchL', shoutNow * 0.35 * Math.min(1, vowelOpen + 0.3));
     set('stretchR', shoutNow * 0.35 * Math.min(1, vowelOpen + 0.3));
-    set('frownL', A * 0.45 * (speaking ? 0.6 : 1));
-    set('frownR', A * 0.45 * (speaking ? 0.6 : 1));
-    set('pressL', A * 0.3 * (speaking ? 0 : 1) * (1 - breathOpen * 3));
-    set('pressR', A * 0.3 * (speaking ? 0 : 1) * (1 - breathOpen * 3));
+    set('frownL', A * 0.45 * (speaking ? 0.6 : 1) + SAD * 0.55);
+    set('frownR', A * 0.45 * (speaking ? 0.6 : 1) + SAD * 0.55);
+    set('pressL', (A * 0.3 + SAD * 0.3) * (speaking ? 0 : 1) * (1 - breathOpen * 3));
+    set('pressR', (A * 0.3 + SAD * 0.3) * (speaking ? 0 : 1) * (1 - breathOpen * 3));
     const roundness = (vs.O || 0) + (vs.U || 0);
-    set('smileL', (E.smile + E.sarcasm * 0.35) * (1 - roundness * 0.7) + (this.smile || 0));
-    set('smileR', E.smile * (1 - roundness * 0.7) + (this.smile || 0));
+    set('smileL', (E.smile + E.sarcasm * 0.35) * (1 - roundness * 0.7) + (this.smile || 0) + LM * 0.8);
+    set('smileR', E.smile * (1 - roundness * 0.7) + (this.smile || 0) + LM * 0.8);
     set('wideL', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + SUR * 0.9);
     set('wideR', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + SUR * 0.9);
 
@@ -863,6 +982,28 @@ export class Human {
     set('blinkL', b);
     set('blinkR', b);
   }
+}
+
+// Vaste armhoudingen in de ruimte van het lichaam (x = links, y = omhoog, z = vooruit),
+// voor de linkerarm; de rechterarm is gespiegeld. [richting bovenarm, richting onderarm]
+const ARM_POSES = {
+  // Dienblad dragen: ellebogen langs het lijf, onderarmen naar voren.
+  tray: { l: [[0.16, -1, 0.22], [-0.2, 0.05, 1]], r: [[0.16, -1, 0.22], [-0.2, 0.05, 1]] },
+  // Armen over elkaar: onderarmen gekruist voor de borst (links iets hoger).
+  crossed: { l: [[0.3, -1, 0.42], [-1, 0.22, 0.32]], r: [[0.3, -1, 0.38], [-1, 0.08, 0.42]] },
+  // Sussen: handen voor het lichaam, iets omhoog ("ho, rustig").
+  calm: { l: [[0.35, -0.65, 0.7], [-0.15, 0.45, 1]], r: [[0.35, -0.65, 0.7], [-0.15, 0.45, 1]] },
+};
+
+// Luidheid van de opname (0..~1.2) op tijdstip t, uit de lipsync-tijdlijn (per 20 ms).
+function loudAt(track, t) {
+  const e = track.e;
+  if (!e) return 0;
+  const f = Math.max(0, (t - 0.02) / 0.02);
+  const i = Math.floor(f);
+  const a0 = e[Math.min(i, e.length - 1)] || 0;
+  const a1 = e[Math.min(i + 1, e.length - 1)] || 0;
+  return (a0 + (a1 - a0) * (f - i)) / 99;
 }
 
 function turnTowards(cur, target, maxStep) {

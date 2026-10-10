@@ -3,6 +3,8 @@
 
 Invoer : tools/words.json  (woorden met begin/eind in seconden, uit ElevenLabs-transcriptie)
 Uitvoer: models/lipsync.json
+Met een setnaam (python3 tools/lipsync.py kantine): tools/words_kantine.json en
+tools/envelope_kantine.json → models/lipsync_kantine.json
 
 Per regel:
   v: [[t, viseme, gewicht, duur], ...]   mondstanden (Oculus/Rocketbox-visemen)
@@ -10,11 +12,12 @@ Per regel:
   b: [[t, duur], ...]                    adempauzes tussen zinsdelen
   e: [0..99, ...]                        luidheid per 20 ms (uit tools/envelope.json)
   w: [[begin, eind, woord], ...]         woorden voor meelezende ondertitels
-Gebruik: python3 tools/lipsync.py
+Gebruik: python3 tools/lipsync.py [set]
 """
 import json
 import os
 import re
+import sys
 import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -181,11 +184,12 @@ def build(entry, env=None):
 
 
 def main():
-    src = json.load(open(os.path.join(ROOT, 'tools', 'words.json'), encoding='utf-8'))
-    env_path = os.path.join(ROOT, 'tools', 'envelope.json')
+    suffix = '_' + sys.argv[1] if len(sys.argv) > 1 else ''
+    src = json.load(open(os.path.join(ROOT, 'tools', f'words{suffix}.json'), encoding='utf-8'))
+    env_path = os.path.join(ROOT, 'tools', f'envelope{suffix}.json')
     envs = json.load(open(env_path)) if os.path.exists(env_path) else {}
     out = {k: build(v, envs.get(k)) for k, v in src.items()}
-    path = os.path.join(ROOT, 'models', 'lipsync.json')
+    path = os.path.join(ROOT, 'models', f'lipsync{suffix}.json')
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(out, f, separators=(',', ':'))
     for k, v in out.items():

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bijna geraakt</title>
+<title>Grap in de kantine</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700;800&family=Noto+Sans+Arabic:wght@400;700&family=Noto+Sans:wght@400;700&display=swap">
@@ -18,7 +18,7 @@
 </script>
 </head>
 <body data-phase="loading">
-<canvas id="scene" aria-label="3D-magazijn"></canvas>
+<canvas id="scene" aria-label="3D-kantine"></canvas>
 <div class="vignette" aria-hidden="true"></div>
 
 <header class="topbar">
@@ -51,11 +51,11 @@
   <div class="start-card">
     <div class="hazard" aria-hidden="true"></div>
     <p class="eyebrow" data-t="eyebrow"><span class="t-nl"></span><span class="t-tr"></span></p>
-    <h1 id="start-title" data-t="title"><span class="t-nl">Bijna geraakt</span><span class="t-tr"></span></h1>
+    <h1 id="start-title" data-t="title"><span class="t-nl">Grap in de kantine</span><span class="t-tr"></span></h1>
     <ol class="story">
-      <li data-t="l1"><span class="ic" data-icon="scanner"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
-      <li data-t="l2"><span class="ic" data-icon="forklift"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
-      <li data-t="l3"><span class="ic" data-icon="angryTalk"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
+      <li data-t="l1"><span class="ic" data-icon="coffee"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
+      <li data-t="l2"><span class="ic" data-icon="laugh"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
+      <li data-t="l3"><span class="ic" data-icon="group"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></li>
     </ol>
     <p class="note" data-t="noteShort"><span class="ic" data-icon="safe"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></p>
     <div class="start-controls">
@@ -76,20 +76,10 @@
       </div>
       <p class="vr-note" id="vr-note" data-t="noVr" hidden><span class="t-nl"></span><span class="t-tr"></span></p>
       <p class="sound" data-t="sound"><span class="ic" data-icon="speaker"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></p>
-      <a class="other-ex" href="kantine.html" data-t="other"><span class="ic" data-icon="next"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></a>
+      <a class="other-ex" href="index.html" data-t="other"><span class="ic" data-icon="next"></span><span class="story-txt"><span class="t-nl"></span><span class="t-tr"></span></span></a>
     </div>
   </div>
 </section>
-
-<aside id="hud" class="hud" hidden aria-hidden="true">
-  <div class="hud-screen">
-    <div class="hud-row"><span>ORDER</span><b>4471</b></div>
-    <div class="hud-dest">→ DOCK 3</div>
-    <div class="hud-row"><span>TRUCK VERTREKT</span><b class="hud-time">03:58</b></div>
-    <div class="hud-bar"><i></i></div>
-  </div>
-  <div class="hud-keys"><i></i><i></i><i></i></div>
-</aside>
 
 <div id="hint" class="hint" hidden data-t="drag"><span class="t-nl"></span></div>
 
@@ -138,6 +128,6 @@
   </div>
 </section>
 
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/kantine.js"></script>
 </body>
 </html>

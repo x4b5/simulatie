@@ -1,5 +1,5 @@
-// Ruimtelijk geluid: stemmen (ElevenLabs), magazijngalm en
-// procedureel gemaakte geluidseffecten (heftruck, claxon, remmen, voetstappen).
+// Ruimtelijk geluid: stemmen (ElevenLabs), galm van de ruimte en
+// procedureel gemaakte geluidseffecten (heftruck, claxon, remmen, voetstappen, kantine).
 
 export class AudioEngine {
   constructor() {
@@ -7,6 +7,8 @@ export class AudioEngine {
     this.buffers = new Map();
     this.muted = false;
     this._levelBuf = null;
+    // Galm van de ruimte: lengte (s), verloop en hoeveel galm. Standaard een grote hal.
+    this.room = { seconds: 2.8, decay: 3.0, wet: 0.32 };
   }
 
   init() {
@@ -23,11 +25,11 @@ export class AudioEngine {
     comp.release.value = 0.2;
     this.master.connect(comp).connect(ctx.destination);
 
-    // Galm van een grote hal.
+    // Galm van de ruimte (zie this.room).
     this.reverb = ctx.createConvolver();
-    this.reverb.buffer = this._impulse(2.8, 3.0);
+    this.reverb.buffer = this._impulse(this.room.seconds, this.room.decay);
     this.wet = ctx.createGain();
-    this.wet.gain.value = 0.32;
+    this.wet.gain.value = this.room.wet;
     this.reverb.connect(this.wet).connect(this.master);
 
     this.noise = this._noiseBuffer(3);
@@ -514,5 +516,154 @@ export class AudioEngine {
     } else {
       this.clank(dest, 0, 180 + Math.random() * 200);
     }
+  }
+
+  // ---------- Kantine ----------
+
+  // Geroezemoes van een tafel verderop: stemachtig gebrom door twee formantfilters,
+  // met lettergreep- en zinsritme (langzame en snelle modulatie door elkaar).
+  murmur(dest, level = 1) {
+    const ctx = this.ctx;
+    // Bron: brommende stem (zaagtand met vibrato) en adem (ruis).
+    const mix = ctx.createGain();
+    mix.gain.value = 0.5;
+    const voice = this._osc('sawtooth', 105 + Math.random() * 90);
+    const vib = this._osc('sine', 0.7 + Math.random());
+    const vibG = ctx.createGain();
+    vibG.gain.value = 14;
+    vib.connect(vibG).connect(voice.frequency);
+    const vg = ctx.createGain();
+    vg.gain.value = 0.35;
+    voice.connect(vg).connect(mix);
+    const breath = this._noiseSrc();
+    const bg = ctx.createGain();
+    bg.gain.value = 0.5;
+    breath.connect(bg).connect(mix);
+    // Lettergrepen (twee onregelmatige ritmes) en pauzes tussen zinnen.
+    const amp = ctx.createGain();
+    amp.gain.value = 0.045 * level;
+    amp.connect(dest);
+    for (const [f, q, g] of [[480 + Math.random() * 160, 2.2, 1], [1350 + Math.random() * 500, 3, 0.55]]) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = f;
+      bp.Q.value = q;
+      const fg = ctx.createGain();
+      fg.gain.value = g;
+      mix.connect(bp).connect(fg).connect(amp);
+    }
+    for (const [f, d] of [[4.1 + Math.random(), 0.022], [6.3 + Math.random() * 1.4, 0.016], [0.17 + Math.random() * 0.1, 0.03]]) {
+      const lfo = this._osc('sine', f);
+      const lg = ctx.createGain();
+      lg.gain.value = d * level;
+      lfo.connect(lg).connect(amp.gain);
+      lfo.start();
+    }
+    voice.start();
+    vib.start();
+    breath.start(0, Math.random() * 2);
+  }
+
+  // Lage roomtoon van een kleine ruimte: ventilatie en het brommen van de koelkast.
+  roomTone() {
+    if (!this.ctx || this._roomTone) return;
+    const ctx = this.ctx;
+    const n = this._noiseSrc();
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 260;
+    const g = ctx.createGain();
+    g.gain.value = 0.06;
+    n.connect(lp).connect(g).connect(this.master);
+    const hum = this._osc('sine', 100);
+    const hg = ctx.createGain();
+    hg.gain.value = 0.004;
+    hum.connect(hg).connect(this.master);
+    n.start(0, 0.7);
+    hum.start();
+    this._roomTone = true;
+  }
+
+  // Bestek tegen een bord of een lepel in een kopje.
+  clink(dest, gain = 0.035) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const base = 2100 + Math.random() * 1300;
+    for (const [mul, a, len] of [[1, 1, 0.22], [2.76, 0.45, 0.12], [4.1, 0.25, 0.06]]) {
+      const o = this._osc('sine', base * mul);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(gain * a, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(g).connect(dest);
+      o.start(t);
+      o.stop(t + len + 0.02);
+    }
+  }
+
+  // Stoel die over de vloer schuift.
+  scrape(dest, dur = 0.35, gain = 0.22) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const n = this._noiseSrc(false);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 4;
+    bp.frequency.setValueAtTime(260, t);
+    bp.frequency.linearRampToValueAtTime(640, t + dur);
+    const rough = this._osc('square', 38);
+    const rg = ctx.createGain();
+    rg.gain.value = 0.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.04);
+    g.gain.setValueAtTime(gain, t + dur * 0.7);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    const am = ctx.createGain();
+    am.gain.value = 0.5;
+    rough.connect(rg).connect(am.gain);
+    n.connect(bp).connect(am).connect(g).connect(dest);
+    n.start(t, Math.random() * 2);
+    rough.start(t);
+    n.stop(t + dur + 0.05);
+    rough.stop(t + dur + 0.05);
+  }
+
+  // Koffieautomaat: bonen malen, daarna stoom en een straaltje koffie.
+  coffee(dest) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const grind = this._noiseSrc(false);
+    const gb = ctx.createBiquadFilter();
+    gb.type = 'bandpass';
+    gb.frequency.value = 950;
+    gb.Q.value = 1.6;
+    const gg = ctx.createGain();
+    gg.gain.setValueAtTime(0, t);
+    gg.gain.linearRampToValueAtTime(0.07, t + 0.15);
+    gg.gain.setValueAtTime(0.07, t + 2.3);
+    gg.gain.linearRampToValueAtTime(0, t + 2.5);
+    const rattle = this._osc('sawtooth', 31);
+    const rg = ctx.createGain();
+    rg.gain.value = 0.03;
+    rattle.connect(rg).connect(gg.gain);
+    grind.connect(gb).connect(gg).connect(dest);
+    grind.start(t);
+    grind.stop(t + 2.6);
+    rattle.start(t);
+    rattle.stop(t + 2.6);
+    const hiss = this._noiseSrc(false);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'bandpass';
+    hp.frequency.value = 2400;
+    hp.Q.value = 0.8;
+    const hg = ctx.createGain();
+    hg.gain.setValueAtTime(0, t + 2.6);
+    hg.gain.linearRampToValueAtTime(0.03, t + 2.9);
+    hg.gain.setValueAtTime(0.03, t + 4.6);
+    hg.gain.linearRampToValueAtTime(0, t + 5.2);
+    hiss.connect(hp).connect(hg).connect(dest);
+    hiss.start(t + 2.6, 0.5);
+    hiss.stop(t + 5.3);
   }
 }

@@ -135,7 +135,7 @@ Nabespreking ── dezelfde 4 kaartjes als in Bijna geraakt. Geen punten.
 | Gedeeld raamwerk: camera, ondertitels, keuze, nabespreking, talen, VR | `js/sim.js` |
 | Magazijn (stellingen, borden, vloermarkering) | `js/world.js` |
 | Kantine (tafels, stoelen, toonbank, ramen, licht) | `js/canteen.js` |
-| Personages (animaties, kijken, wijzen, zitten, lachen, gezicht, lipsync) | `js/human.js` |
+| Personages (animaties, kijken, wijzen, zitten, lachen, gezicht, lipsync, knipperen, huid en ogen) | `js/human.js` |
 | 3D-modellen, texturen en gebakken animaties | `models/` |
 | Heftruck | `js/forklift.js` |
 | Geluidseffecten, ruimtelijk geluid en galm | `js/audio.js` |

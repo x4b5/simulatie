@@ -235,11 +235,16 @@ function liveSkin(mat, head) {
 		// Alleen huidtinten (rood > groen >= blauw, niet bijna zwart): geen mouwen of handschoenen.
 		float key = smoothstep( 0.0, 0.035, c.r - c.g ) * smoothstep( -0.012, 0.012, c.g - c.b ) * smoothstep( 0.012, 0.05, l );
 		sssMask = zone * key;
-		vec3 warm = max( mix( vec3( l ), c, 1.08 ), 0.0 ) * vec3( 1.04, 0.99, 0.95 );
+	#ifdef HUMAN_HEAD
+		vec3 warm = max( mix( vec3( l ), c, 1.06 ), 0.0 ) * vec3( 1.035, 0.99, 0.955 );
+	#else
+		// De handen in de Rocketbox-texturen zijn bleek roze: iets voller en warmer, iets donkerder.
+		vec3 warm = max( mix( vec3( l ), c, 1.22 ), 0.0 ) * vec3( 0.97, 0.88, 0.8 );
+	#endif
 		diffuseColor.rgb = mix( c, warm, sssMask );
 	#ifdef HUMAN_HEAD
 		float scl = smoothstep( 0.1, 0.32, l );
-		vec3 sclera = mix( vec3( l ), c, 0.45 ) * vec3( 0.84, 0.82, 0.8 );
+		vec3 sclera = mix( vec3( l ), c, 0.45 ) * vec3( 0.76, 0.74, 0.72 );
 		vec3 iris = max( mix( vec3( l ), c, 1.45 ), 0.0 ) * 0.62;
 		diffuseColor.rgb = mix( diffuseColor.rgb, mix( iris, sclera, scl ), eyeMask );
 	#endif
@@ -262,7 +267,7 @@ function liveSkin(mat, head) {
 			// Bovenooglid en wimpers werpen schaduw op de bovenkant van de oogbol; de randen
 			// (ooghoeken, waar de oogbol wegdraait) zijn donkerder.
 			float facing = saturate( dot( normal, normalize( vViewPosition ) ) );
-			float occ = 0.5 * smoothstep( 0.0, 0.55, normal.y ) + 0.4 * ( 1.0 - smoothstep( 0.35, 0.85, facing ) );
+			float occ = 0.6 * smoothstep( -0.05, 0.5, normal.y ) + 0.45 * ( 1.0 - smoothstep( 0.35, 0.85, facing ) );
 			diffuseColor.rgb *= 1.0 - eyeMask * min( occ, 0.75 );
 		}
 	#endif`,
@@ -755,7 +760,7 @@ export class Human {
       this.inhale(tr.b[sp.bi][1] * 0.7);
       // Soms kort wegkijken bij een pauze, zoals mensen doen als ze nadenken.
       if (Math.random() < 0.45) {
-        if (Math.random() < 0.5 && this.blink <= 0) this.blink = BLINK;
+        if (Math.random() < 0.5 && this._canBlink()) this.blink = BLINK;
         this.glanceT = 0.45 + Math.random() * 0.4;
         this.glanceDir.set((Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.2), -0.12 - Math.random() * 0.1);
       }
@@ -926,7 +931,7 @@ export class Human {
     if (target) {
       this.bones.head.getWorldPosition(_v);
       const dir = _v2.copy(target).sub(_v).normalize();
-      if (this._gazeDir && this._gazeDir.dot(dir) < 0.94 && this.blink <= 0 && Math.random() < 0.75) this.blink = BLINK;
+      if (this._gazeDir && this._gazeDir.dot(dir) < 0.94 && this._canBlink() && Math.random() < 0.75) this.blink = BLINK;
       (this._gazeDir ||= new THREE.Vector3()).copy(dir);
     }
     if (t && this.lookW > 0.01 && this.torsoFollow > 0) {
@@ -1207,7 +1212,10 @@ export class Human {
       const busy = speaking || A > 0.5;
       this.blinkT = Math.random() < 0.14 ? BLINK + 0.12 : (busy ? 1.4 : 2.2) + Math.random() * (busy ? 2.6 : 3.8);
     }
-    if (this.blink > (this._blinkPrev || 0)) this._blinkDur = this.blink;
+    if (this.blink > (this._blinkPrev || 0)) {
+      this._blinkDur = this.blink;
+      this._blinkAt = this.time;
+    }
     this.blink = Math.max(0, this.blink - dt);
     this._blinkPrev = this.blink;
     const u = this.blink > 0 ? 1 - this.blink / (this._blinkDur || BLINK) : 1;
@@ -1221,6 +1229,11 @@ export class Human {
     );
     set('blinkL', lid + (1 - lid) * b);
     set('blinkR', lid + (1 - lid) * Math.min(1, b * 1.04));
+  }
+
+  // Extra knipper (bij wegkijken) alleen als hij niet net al knipperde.
+  _canBlink() {
+    return this.blink <= 0 && this.time - (this._blinkAt ?? -9) > 0.9;
   }
 
   // Levendigheid in rust: wat een gezicht doet als het "niets" doet.

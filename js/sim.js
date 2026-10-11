@@ -38,10 +38,12 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 export const camera = new THREE.PerspectiveCamera(68, 1, 0.05, 140);
-// Zacht vullicht vanuit de kijkrichting: gezichten blijven leesbaar, ook in de schaduw.
-const faceFill = new THREE.SpotLight(0xfff1e2, 4.5, 5, 0.6, 1, 2);
-faceFill.position.set(0, 0.15, 0);
-faceFill.target.position.set(0, 0, -1);
+// Zacht, warm vullicht vanuit de kijkrichting: gezichten blijven leesbaar, ook in de schaduw.
+// Iets boven en links van de kijker, zodat het gezicht vorm houdt (niet plat van voren) en
+// de ogen een klein lichtpuntje krijgen, zoals in het echt.
+const faceFill = new THREE.SpotLight(0xffe4cc, 4.2, 5, 0.6, 1, 2);
+faceFill.position.set(-0.3, 0.35, 0);
+faceFill.target.position.set(0.05, -0.1, -1);
 camera.add(faceFill, faceFill.target);
 export const rig = new THREE.Group();
 rig.add(camera);

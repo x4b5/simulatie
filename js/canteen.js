@@ -465,7 +465,8 @@ export function buildCanteen(scene, renderer) {
   ceil.castShadow = true;
   world.add(ceil);
   // LED-panelen.
-  const mPanel = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff7ec, emissiveIntensity: 2.2 });
+  // Niet te fel: anders overstralen de panelen en verbleken de gezichten eronder.
+  const mPanel = new THREE.MeshStandardMaterial({ color: 0xe6e6e6, emissive: 0xfff4e6, emissiveIntensity: 1.05 });
   const panelGeo = new THREE.PlaneGeometry(0.58, 1.18);
   for (const x of [-3.6, 0, 3.6]) {
     for (const z of [-5.1, -2.1, 0.9]) {

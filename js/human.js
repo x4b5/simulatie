@@ -32,6 +32,8 @@ const EYE_DOWN = 0.25;
 export const EXPRESSION = 0.62;
 // Hoe sterk de procedurele lichaamsaccenten zijn bovenop de motion capture.
 const BODY_ACCENT = 0.6;
+// Duur van een knipper (s): snel dicht, rustiger weer open.
+const BLINK = 0.2;
 
 const animCache = new Map();
 
@@ -165,6 +167,109 @@ function tex(url, srgb) {
   return t;
 }
 
+// ---- Levende huid en ogen ----
+// Per hoekpunt: x = hoort bij een oogbol (gewicht van de oogbotten), y = hoort bij een hand
+// (hand- en vingerbotten). Zo weten de shaders waar oog en blote huid zitten, ook al delen ogen
+// en gezicht één textuur en handen en kleding een andere.
+function tagVertices(mesh) {
+  const g = mesh.geometry;
+  const sk = mesh.skeleton;
+  if (!sk || !g.attributes.skinIndex || g.attributes.aTag) return;
+  const eye = new Set();
+  const hand = new Set();
+  sk.bones.forEach((b, i) => {
+    if (/_[LR]Eye$/.test(b.name)) eye.add(i);
+    else if (/_[LR]_(Hand|Finger)/.test(b.name)) hand.add(i);
+  });
+  const si = g.attributes.skinIndex;
+  const sw = g.attributes.skinWeight;
+  const tag = new Float32Array(si.count * 2);
+  for (let v = 0; v < si.count; v++) {
+    for (let k = 0; k < 4; k++) {
+      const b = si.getComponent(v, k);
+      const w = sw.getComponent(v, k);
+      if (eye.has(b)) tag[v * 2] += w;
+      else if (hand.has(b)) tag[v * 2 + 1] += w;
+    }
+  }
+  g.setAttribute('aTag', new THREE.BufferAttribute(tag, 2));
+}
+
+// Huid: licht dringt een eindje onder de huid en komt rood terug. Benadering: per kleurkanaal
+// "omwikkelde" belichting (rood loopt verder door voorbij de schaduwgrens dan blauw).
+const SKIN_LIGHTS = THREE.ShaderChunk.lights_physical_pars_fragment.replace(
+  'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
+  `vec3 sssW = vec3( 0.5, 0.2, 0.1 ) * sssMask;
+	vec3 sssIrr = saturate( ( vec3( dot( geometryNormal, directLight.direction ) ) + sssW ) / ( 1.0 + sssW ) ) * directLight.color;
+	reflectedLight.directDiffuse += sssIrr * BRDF_Lambert( material.diffuseColor );`,
+);
+
+// Maakt van een Rocketbox-materiaal levende huid (en bij het hoofd: natte ogen).
+// - Huid (gezicht, hals, handen; alleen huidtinten): iets warmer en verzadigder, zachte
+//   roodachtige lichtdoorval, matte glans (geen plastic).
+// - Ogen: nat en glanzend (lage ruwheid, weerspiegeling van de ruimte en de lampen), oogwit
+//   minder fel en iets grijzer, iris donkerder en voller, schaduw van het bovenooglid en in
+//   de ooghoeken. Zonder dat oogwit zie je de "dode", starende blik.
+function liveSkin(mat, head) {
+  mat.defines = { ...(mat.defines || {}), ...(head ? { HUMAN_HEAD: '' } : {}) };
+  mat.customProgramCacheKey = () => (head ? 'human-head' : 'human-body');
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 aTag;\nvarying vec2 vTag;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTag = aTag;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vTag;\nfloat sssMask = 0.0;\nfloat eyeMask = 0.0;')
+      .replace('#include <lights_physical_pars_fragment>', SKIN_LIGHTS)
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+	{
+		vec3 c = diffuseColor.rgb;
+		float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+	#ifdef HUMAN_HEAD
+		eyeMask = smoothstep( 0.5, 0.9, vTag.x );
+		float zone = 1.0 - eyeMask;
+	#else
+		float zone = smoothstep( 0.25, 0.75, vTag.y );
+	#endif
+		// Alleen huidtinten (rood > groen >= blauw, niet bijna zwart): geen mouwen of handschoenen.
+		float key = smoothstep( 0.0, 0.035, c.r - c.g ) * smoothstep( -0.012, 0.012, c.g - c.b ) * smoothstep( 0.012, 0.05, l );
+		sssMask = zone * key;
+		vec3 warm = max( mix( vec3( l ), c, 1.08 ), 0.0 ) * vec3( 1.04, 0.99, 0.95 );
+		diffuseColor.rgb = mix( c, warm, sssMask );
+	#ifdef HUMAN_HEAD
+		float scl = smoothstep( 0.1, 0.32, l );
+		vec3 sclera = mix( vec3( l ), c, 0.45 ) * vec3( 0.84, 0.82, 0.8 );
+		vec3 iris = max( mix( vec3( l ), c, 1.45 ), 0.0 ) * 0.62;
+		diffuseColor.rgb = mix( diffuseColor.rgb, mix( iris, sclera, scl ), eyeMask );
+	#endif
+	}`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+	#ifdef HUMAN_HEAD
+		roughnessFactor = mix( roughnessFactor, 0.06, eyeMask );
+	#else
+		roughnessFactor = mix( roughnessFactor, 0.6, sssMask );
+	#endif`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+	#ifdef HUMAN_HEAD
+		if ( eyeMask > 0.0 ) {
+			// Bovenooglid en wimpers werpen schaduw op de bovenkant van de oogbol; de randen
+			// (ooghoeken, waar de oogbol wegdraait) zijn donkerder.
+			float facing = saturate( dot( normal, normalize( vViewPosition ) ) );
+			float occ = 0.5 * smoothstep( 0.0, 0.55, normal.y ) + 0.4 * ( 1.0 - smoothstep( 0.35, 0.85, facing ) );
+			diffuseColor.rgb *= 1.0 - eyeMask * min( occ, 0.75 );
+		}
+	#endif`,
+      );
+  };
+}
+
 export class Human {
   // anims: één animatieset of een lijst sets (de clips worden samengevoegd).
   static async load({ model, code, anims, facial = true, badge = null }) {
@@ -203,18 +308,20 @@ export class Human {
             part === 'head'
               ? new THREE.MeshPhysicalMaterial({
                   ...common,
-                  roughness: 0.52,
-                  sheen: 0.25,
+                  roughness: 0.55,
+                  sheen: 0.2,
                   sheenRoughness: 0.8,
-                  sheenColor: new THREE.Color(0x8c6656),
-                  specularIntensity: 0.6,
-                  envMapIntensity: 0.8,
+                  sheenColor: new THREE.Color(0x9a6252),
+                  specularIntensity: 0.55,
+                  envMapIntensity: 0.65,
                 })
               : new THREE.MeshStandardMaterial({ ...common, roughness: part === 'tools' ? 0.6 : 0.85 });
           mat.normalScale.set(1, -1);
+          if (part !== 'tools') liveSkin(mat, part === 'head');
           return mat;
         });
         n.material = Array.isArray(n.material) ? mats : mats[0];
+        tagVertices(n);
         if (n.morphTargetDictionary) this._pruneMorphs(n);
         if (!this.mesh || n.morphTargetInfluences) this.mesh = n;
       }
@@ -303,6 +410,14 @@ export class Human {
     this.glanceT = 0;
     this.glanceDir = new THREE.Vector2();
     this.jabs = [];
+    // Levendigheid in rust: elk gezicht net iets anders (scheefte van de mond, hoe ver de
+    // oogleden hangen), een ademritme en kleine, korte gezichtsbewegingen.
+    this.asym = (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.6);
+    this.lidRest = 0.13 + Math.random() * 0.06;
+    this.breathRate = (Math.PI * 2) / (3.8 + Math.random() * 1.2);
+    this.micro = null;
+    this._lipsRest = 0;
+    this.microT = 1.5 + Math.random() * 3;
     this._play('idle', 0);
   }
 
@@ -407,7 +522,7 @@ export class Human {
     if (this.speech && (this.emoTarget?.shout || 0) > 0.45) this.pant = 1;
     this.speech = null;
     this.emoTarget = { shout: 0, smile: this.emoTarget?.smile * 0.5 || 0, worry: 0, sarcasm: 0 };
-    if (Math.random() < 0.7) this.blink = 0.16;
+    if (Math.random() < 0.7) this.blink = BLINK;
   }
 
   // Non-verbale reactie terwijl de ander praat.
@@ -633,13 +748,14 @@ export class Human {
     while (sp.si < tr.s.length && tr.s[sp.si][0] <= t) {
       const st = tr.s[sp.si][1];
       this.emphTarget = Math.max(this.emphTarget || 0, st);
-      if (st >= 0.85 && Math.random() < 0.5) this.blink = 0.16;
+      if (st >= 0.85 && Math.random() < 0.5) this.blink = BLINK;
       sp.si++;
     }
     while (sp.bi < tr.b.length && tr.b[sp.bi][0] <= t) {
       this.inhale(tr.b[sp.bi][1] * 0.7);
       // Soms kort wegkijken bij een pauze, zoals mensen doen als ze nadenken.
       if (Math.random() < 0.45) {
+        if (Math.random() < 0.5 && this.blink <= 0) this.blink = BLINK;
         this.glanceT = 0.45 + Math.random() * 0.4;
         this.glanceDir.set((Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.2), -0.12 - Math.random() * 0.1);
       }
@@ -806,6 +922,13 @@ export class Human {
     }
     const t = target ? this._lookPos : this._lastLook;
     const head = this.bones.head;
+    // Bij een grote verandering van kijkrichting knipperen mensen vaak (oog-hoofdbeweging).
+    if (target) {
+      this.bones.head.getWorldPosition(_v);
+      const dir = _v2.copy(target).sub(_v).normalize();
+      if (this._gazeDir && this._gazeDir.dot(dir) < 0.94 && this.blink <= 0 && Math.random() < 0.75) this.blink = BLINK;
+      (this._gazeDir ||= new THREE.Vector3()).copy(dir);
+    }
     if (t && this.lookW > 0.01 && this.torsoFollow > 0) {
       // Zittend draait de romp een stukje mee naar wie hij aankijkt.
       const sp2 = this.bones.spine2;
@@ -910,6 +1033,7 @@ export class Human {
     }
     this.sacc.lerp(this.saccTarget, 1 - Math.exp(-40 * dt));
     // Ogen maken oogcontact, gemeten vanuit de kijkrichting van het hoofd (vooruit, omhoog, opzij).
+    this._eyePitch = 0;
     if (!this.eyeRest) return;
     head.getWorldQuaternion(_q);
     const F = _f.copy(this.headFwd).applyQuaternion(_q).normalize();
@@ -930,6 +1054,7 @@ export class Human {
       // Draaien binnen de oogkas, apart begrensd opzij en omhoog/omlaag.
       const yaw = THREE.MathUtils.clamp(Math.atan2(desired.dot(R), desired.dot(F)), -EYE_YAW, EYE_YAW) * this.lookW;
       const pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(desired.dot(U), -1, 1)), -EYE_DOWN, EYE_UP) * this.lookW;
+      this._eyePitch = pitch;
       const dir = _v2.copy(F).multiplyScalar(Math.cos(pitch) * Math.cos(yaw))
         .addScaledVector(R, Math.cos(pitch) * Math.sin(yaw))
         .addScaledVector(U, Math.sin(pitch));
@@ -1033,25 +1158,29 @@ export class Human {
     this.jaw += (Math.max(jawT, LA * 0.5) + breathOpen - this.jaw) * (1 - Math.exp(-30 * dt));
     set('jawOpen', this.jaw + SUR * 0.3);
     set('mouthClose', (vs.PP || 0) * 0.35);
-    set('lipsPart', speaking ? 0.12 + breathOpen : breathOpen * 1.2);
+    set('lipsPart', speaking ? 0.12 + breathOpen : breathOpen * 1.2 + this._lipsRest);
+
+    // ---- Levendigheid: spiertonus in rust, adem, micro-uitdrukkingen ----
+    const L = this._life(dt, speaking, A);
+    const sm = 1 - roundnessOf(vs) * 0.7;
 
     // ---- Emotie, ook tijdens het praten ----
     const shoutNow = E.shout * (speaking ? 0.6 + 0.4 * Math.min(1, loud) : 0.35) * EXPRESSION;
     const angryEmph = A > 0.25 ? emph : 0;
     const calmEmph = A <= 0.25 ? emph : 0;
-    set('browDownL', A * 0.85 + angryEmph * 0.3);
-    set('browDownR', A * 0.85 + angryEmph * 0.3);
+    set('browDownL', A * 0.85 + angryEmph * 0.3 + L.browDown);
+    set('browDownR', A * 0.85 + angryEmph * 0.3 + L.browDown);
     set('browLower', A * 0.55 + angryEmph * 0.25);
     const SAD = E.sad * EXPRESSION;
-    set('browInnerUp', Math.max(0, 0.25 - A) * 0.5 + E.worry * 0.7 + calmEmph * 0.45 + SUR * 0.8 + SAD * 0.9 + LM * 0.15);
-    set('browOuterUpL', calmEmph * 0.5 + E.sarcasm * 0.25 + SUR * 0.7);
-    set('browOuterUpR', calmEmph * 0.5 + SUR * 0.7);
-    set('sneerL', A * 0.3 + shoutNow * 0.25);
-    set('sneerR', A * 0.3 + shoutNow * 0.25);
-    set('squintL', A * 0.32 + angryEmph * 0.2 + LM * 0.45);
-    set('squintR', A * 0.32 + angryEmph * 0.2 + LM * 0.45);
-    set('cheekSquintL', shoutNow * 0.3 + E.smile * 0.4 + LM * 0.7);
-    set('cheekSquintR', shoutNow * 0.3 + E.smile * 0.4 + LM * 0.7);
+    set('browInnerUp', Math.max(0, 0.25 - A) * 0.5 + E.worry * 0.7 + calmEmph * 0.45 + SUR * 0.8 + SAD * 0.9 + LM * 0.15 + L.browIn);
+    set('browOuterUpL', calmEmph * 0.5 + E.sarcasm * 0.25 + SUR * 0.7 + L.browL);
+    set('browOuterUpR', calmEmph * 0.5 + SUR * 0.7 + L.browR);
+    set('sneerL', A * 0.3 + shoutNow * 0.25 + L.nose);
+    set('sneerR', A * 0.3 + shoutNow * 0.25 + L.nose);
+    set('squintL', A * 0.32 + angryEmph * 0.2 + LM * 0.45 + L.squint);
+    set('squintR', A * 0.32 + angryEmph * 0.2 + LM * 0.45 + L.squint);
+    set('cheekSquintL', shoutNow * 0.3 + E.smile * 0.4 + LM * 0.7 + L.cheekL);
+    set('cheekSquintR', shoutNow * 0.3 + E.smile * 0.4 + LM * 0.7 + L.cheekR);
     // Tanden ontbloten bij schreeuwen, gespannen lippen als hij zwijgt.
     const vowelOpen = (vs.aa || 0) + (vs.E || 0) + (vs.I || 0);
     set('upperUpL', A * 0.18 * vowelOpen + shoutNow * 0.45);
@@ -1061,25 +1190,99 @@ export class Human {
     set('stretchR', shoutNow * 0.35 * Math.min(1, vowelOpen + 0.3));
     set('frownL', A * 0.45 * (speaking ? 0.6 : 1) + SAD * 0.55);
     set('frownR', A * 0.45 * (speaking ? 0.6 : 1) + SAD * 0.55);
-    set('pressL', (A * 0.3 + SAD * 0.3) * (speaking ? 0 : 1) * (1 - breathOpen * 3));
-    set('pressR', (A * 0.3 + SAD * 0.3) * (speaking ? 0 : 1) * (1 - breathOpen * 3));
-    const roundness = (vs.O || 0) + (vs.U || 0);
-    set('smileL', (E.smile + E.sarcasm * 0.35) * (1 - roundness * 0.7) + (this.smile || 0) + LM * 0.8);
-    set('smileR', E.smile * (1 - roundness * 0.7) + (this.smile || 0) + LM * 0.8);
-    set('wideL', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + SUR * 0.9);
-    set('wideR', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + SUR * 0.9);
+    set('pressL', ((A * 0.3 + SAD * 0.3) * (speaking ? 0 : 1) + L.press) * (1 - breathOpen * 3));
+    set('pressR', ((A * 0.3 + SAD * 0.3) * (speaking ? 0 : 1) + L.press) * (1 - breathOpen * 3));
+    set('smileL', (E.smile + E.sarcasm * 0.35 + L.smileL) * sm + (this.smile || 0) + LM * 0.8);
+    set('smileR', (E.smile + L.smileR) * sm + (this.smile || 0) + LM * 0.8);
+    set('wideL', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + SUR * 0.9 + L.wide);
+    set('wideR', angryEmph * 0.35 * (A > 0.7 ? 1 : 0.5) + SUR * 0.9 + L.wide);
 
-    // ---- Knipperen (vaker bij spanning) ----
+    // ---- Knipperen ----
+    // Elke 2 à 6 s, vaker bij praten en spanning; soms twee keer kort na elkaar. Snel dicht,
+    // rustiger open. De oogleden hangen in rust iets (minder oogwit boven de iris) en
+    // volgen de blik: omlaag kijken laat het bovenooglid zakken.
     this.blinkT -= dt;
     if (this.blinkT < 0) {
-      this.blink = 0.16;
-      this.blinkT = (A > 0.6 ? 1.6 : 2.4) + Math.random() * 3;
+      this.blink = BLINK;
+      const busy = speaking || A > 0.5;
+      this.blinkT = Math.random() < 0.14 ? BLINK + 0.12 : (busy ? 1.4 : 2.2) + Math.random() * (busy ? 2.6 : 3.8);
     }
+    if (this.blink > (this._blinkPrev || 0)) this._blinkDur = this.blink;
     this.blink = Math.max(0, this.blink - dt);
-    const b = this.blink > 0 ? Math.sin((this.blink / 0.16) * Math.PI) : 0;
-    set('blinkL', b);
-    set('blinkR', b);
+    this._blinkPrev = this.blink;
+    const u = this.blink > 0 ? 1 - this.blink / (this._blinkDur || BLINK) : 1;
+    const b = this.blink > 0 ? (u < 0.35 ? THREE.MathUtils.smoothstep(u, 0, 0.35) : 1 - THREE.MathUtils.smoothstep(u, 0.35, 1)) : 0;
+    const pitch = this._eyePitch || 0;
+    // Rusthouding van de oogleden; weg bij schrik/opengesperde ogen, verder dicht bij omlaag kijken.
+    const lid = THREE.MathUtils.clamp(
+      (this.lidRest + L.lid) * (1 - Math.min(1, SUR * 2 + angryEmph)) + Math.max(0, -pitch) * 1.1 - Math.max(0, pitch) * 0.3,
+      0,
+      0.55,
+    );
+    set('blinkL', lid + (1 - lid) * b);
+    set('blinkR', lid + (1 - lid) * Math.min(1, b * 1.04));
   }
+
+  // Levendigheid in rust: wat een gezicht doet als het "niets" doet.
+  //  - spiertonus: mondhoeken net iets omhoog (scheef), lippen licht op elkaar of net open
+  //  - adem: neusvleugels en lippen bewegen licht mee
+  //  - om de paar seconden een korte micro-uitdrukking (wenkbrauw op, mondhoek, lippen op
+  //    elkaar, ogen iets samenknijpen), passend bij de stemming; bij luisteren vaker de wenkbrauwen
+  _life(dt, speaking, A) {
+    const X = EXPRESSION;
+    const breath = 0.5 + 0.5 * Math.sin(this.time * this.breathRate);
+    this.microT -= dt;
+    if (this.microT < 0 && !this.micro) {
+      const E = this.emo;
+      const opts = [
+        ['brow', speaking ? 1.6 : this.lookTarget ? 1.4 : 0.6],
+        ['smirk', 0.6 + E.smile * 2 + E.sarcasm * 2 - A],
+        ['press', 0.6 + A + E.worry + E.sad],
+        ['squint', 0.6 + E.smile],
+        ['frownBrow', 0.3 + A + E.worry],
+        ['nose', 0.25],
+      ].filter(([, w]) => w > 0);
+      let r = Math.random() * opts.reduce((a, [, w]) => a + w, 0);
+      let kind = opts[0][0];
+      for (const [k, w] of opts) if ((r -= w) <= 0) { kind = k; break; }
+      this.micro = { kind, t: 0, dur: 0.7 + Math.random() * 0.9, amp: 0.6 + Math.random() * 0.4, side: Math.random() < 0.5 ? -1 : 1 };
+      this.microT = (speaking ? 1.6 : 2.5) + Math.random() * 4;
+    }
+    let k = 0;
+    const m = this.micro;
+    if (m) {
+      m.t += dt;
+      const x = m.t / m.dur;
+      k = THREE.MathUtils.smoothstep(x, 0, 0.25) * (1 - THREE.MathUtils.smoothstep(x, 0.55, 1)) * m.amp * X;
+      if (x >= 1) this.micro = null;
+    }
+    const is = (n) => (m && m.kind === n ? k : 0);
+    const one = (n, s) => (m && m.kind === n && m.side === s ? k : 0);
+    // Rustende mond: niet helemaal slap. Scheef glimlachje, kleiner bij boosheid of verdriet.
+    const tone = 0.07 * X * Math.max(0, 1 - A * 1.5 - this.emo.sad * 1.5);
+    const s = this.asym;
+    this._lipsRest = speaking ? 0 : 0.03 + 0.03 * breath;
+    return {
+      smileL: tone * (1 + 0.45 * s) + one('smirk', 1) * 0.28 + is('squint') * 0.05,
+      smileR: tone * (1 - 0.45 * s) + one('smirk', -1) * 0.28 + is('squint') * 0.05,
+      cheekL: one('smirk', 1) * 0.12 + is('squint') * 0.18,
+      cheekR: one('smirk', -1) * 0.12 + is('squint') * 0.18,
+      press: (speaking ? 0 : 0.05 * X) + is('press') * 0.3,
+      browIn: is('brow') * 0.18,
+      browL: is('brow') * (0.3 + 0.1 * (m ? m.side : 0)),
+      browR: is('brow') * (0.3 - 0.1 * (m ? m.side : 0)),
+      browDown: is('frownBrow') * 0.22 + is('press') * 0.06,
+      squint: 0.06 * X + is('squint') * 0.2,
+      nose: breath * 0.035 * X + is('nose') * 0.12,
+      wide: is('brow') * 0.06,
+      lid: -is('brow') * 0.06 + is('squint') * 0.05,
+    };
+  }
+}
+
+// Ronding van de lippen (o, oe): dan geen glimlach.
+function roundnessOf(vs) {
+  return (vs.O || 0) + (vs.U || 0);
 }
 
 // Vaste armhoudingen in de ruimte van het lichaam (x = links, y = omhoog, z = vooruit),

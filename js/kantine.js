@@ -5,7 +5,7 @@ import { buildCanteen, canteenLights, makeTray, SEATS, SPOTS, seatPoint, TABLE_H
 import { UI, LINES, CHOICES, OUTCOMES } from './i18n-kantine.js';
 import { CANTEEN_CHOICE_ICON } from './icons.js';
 import {
-  V, renderer, scene, rig, audio, S, simT, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
+  V, renderer, scene, rig, audio, S, simT, runId, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
   look, lookAtFn, lookDir, snapLook, flinch, playerHead, playerChest, say, playerSays,
   stopVoice, hideSub, setPhase, goChoice, start,
 } from './sim.js';
@@ -43,18 +43,32 @@ const _c = new THREE.Vector3();
 
 async function makeCast() {
   canteen = buildCanteen(scene, renderer);
-  const load = (model, code, anims = ANIMS) => Human.load({ model, code, anims });
+  const load = (model, code, anims = ANIMS, opts = {}) => Human.load({ model, code, anims, ...opts });
+  // In de lunchpauze: geen hesje, geen handschoenen, geen portofoon. De 'k'-texturen zijn kopieën
+  // van de lichaamstexturen met de overall in plaats van het hesje en blote handen.
+  const VEST_PARTS = [
+    [0.4, 0.85, 0.615, 0.995], // portofoon, microfoon en snoer
+    [0.465, 0.42, 0.535, 0.485], // sluitlusje van het hesje
+  ];
+  const lunch = (bodyCode) => ({ bodyCode, hideUV: VEST_PARTS });
   // Realistische personages (Microsoft Rocketbox, MIT-licentie).
   [marco, dennis, tomasz, bg1, bg2, bg3, sandra] = await Promise.all([
-    load('models/marco.fbx', 'm108'),
-    load('models/dennis.fbx', 'm107'),
+    load('models/marco.fbx', 'm108', ANIMS, lunch('m108k')),
+    load('models/dennis.fbx', 'm107', ANIMS, lunch('m107k')),
     load('models/tomasz.fbx', 'm105'),
     load('models/collega2.fbx', 'm102'),
     load('models/collega4.fbx', 'm103'),
     load('models/collega5.fbx', 'm104'),
-    load('models/sandra.fbx', 'f101', 'models/anim_f'),
+    load('models/sandra.fbx', 'f101', 'models/anim_f', lunch('f101k')),
   ]);
   cast = [marco, dennis, tomasz, bg1, bg2, bg3, sandra];
+  // Niemand heeft in de pauze gereedschap bij zich (gordel, tasjes, duimstok; de duimstok van Tomasz
+  // prikte ook door het tafelblad).
+  for (const p of cast) {
+    p.root.traverse((n) => {
+      if (n.isMesh) for (const m of [].concat(n.material)) if (/tools/i.test(m.name)) m.visible = false;
+    });
+  }
   for (const p of cast) {
     scene.add(p.root);
     p.seatOffset = 0;
@@ -66,6 +80,9 @@ async function makeCast() {
   }
   tray = makeTray({ food: 'soup', cup: true });
   scene.add(tray);
+  // Eigen kopje, bestek en (bij de collega die alleen zit) telefoon: om af en toe iets mee te doen.
+  for (const [p, seat] of [[marco, 'marco'], [dennis, 'dennis'], [bg1, 'bg1'], [bg2, 'bg2'], [bg3, 'bg3']]) p.props = { ...canteen.props[seat] };
+  for (const p of [bg1, bg2, bg3, sandra]) p.fidgetRate = 1.3;
 
   // Achtergrond: twee collega's in gesprek, één alleen met koffie, Sandra bij de koffieautomaat.
   sitAt(bg1, 'bg1', 'sitTableRelaxed');
@@ -156,7 +173,7 @@ async function bgAlone() {
   for (;;) {
     await waitReal(4 + Math.random() * 5);
     if (bgStare) continue;
-    bg3.lookTarget = V(-1 + Math.random() * 2, 1.3, -2 + Math.random() * 2);
+    bg3.lookTarget = V(-1 + Math.random() * 2, -2 + Math.random() * 2, 1.3);
     await waitReal(1.6);
     if (bgStare) continue;
     bg3.lookTarget = tablePoint('bg3', 0.1, 0.3);
@@ -167,8 +184,8 @@ async function bgAlone() {
 let coffeePanner = null;
 async function sandraLoop() {
   // Sandra (teamleider) haalt koffie: knop indrukken, wachten, kopje pakken, rondkijken.
-  const machine = V(SPOTS.coffee.x - 0.08, 1.38, -6.0);
-  const nook = V(SPOTS.coffee.x - 0.08, 0.98, -5.95);
+  const machine = V(SPOTS.coffee.x - 0.08, -6.0, 1.38);
+  const nook = V(SPOTS.coffee.x - 0.08, -5.95, 0.98);
   sandra.lookTarget = machine;
   for (;;) {
     await waitReal(3 + Math.random() * 4);
@@ -182,22 +199,36 @@ async function sandraLoop() {
     await waitReal(1.6);
     if (bgStare) continue;
     // Even de kantine in kijken.
-    sandra.lookTarget = V(-1 + Math.random() * 2, 1.2, -1);
+    sandra.lookTarget = V(-1 + Math.random() * 2, -1, 1.2);
     await waitReal(3.5);
     if (!bgStare) sandra.lookTarget = machine;
     await waitReal(8 + Math.random() * 8);
   }
 }
 
-// In de ruzie kijken de anderen in de kantine om naar Dennis.
-function everyoneLooks() {
+// Meerdere mensen reageren nooit precies tegelijk: ieder met een eigen vertraging (80–400 ms).
+const rnd = (a, b) => a + Math.random() * (b - a);
+function stagger(id, people, fn, min = 0.08, max = 0.4) {
+  const order = [...people].sort(() => Math.random() - 0.5);
+  let t = 0;
+  order.forEach((p, i) => {
+    t = i === 0 ? rnd(min, min + 0.08) : Math.min(max, t + rnd(0.07, 0.17));
+    later(id, t, () => fn(p, i));
+  });
+}
+
+// In de ruzie kijken de anderen in de kantine om naar Dennis: niet allemaal tegelijk en niet
+// allemaal even ver (wie dichtbij zit draait verder mee).
+function everyoneLooks(id) {
   bgStare = true;
-  for (const p of [bg1, bg2, bg3, sandra]) {
+  stagger(id, [bg1, bg2, bg3, sandra], (p) => {
+    p.settle(8);
     p.lookTarget = headOf(dennis);
-    p.torsoFollow = 0.35;
-  }
-  sandra.faceTowards(dennis.root.position.x, dennis.root.position.z);
-  bg1.react('startle');
+    p.torsoFollow = p === sandra ? 0.2 : rnd(0.25, 0.42);
+    if (p === sandra) sandra.faceTowards(dennis.root.position.x, dennis.root.position.z);
+    if (p === bg1) bg1.react('startle');
+    else if (p === bg2 && Math.random() < 0.6) p.surprise = rnd(0.2, 0.35);
+  }, 0.1, 0.6);
 }
 
 function resetBackground() {
@@ -210,7 +241,7 @@ function resetBackground() {
   sandra.root.position.copy(SPOTS.coffee);
   sandra.root.rotation.y = Math.PI;
   sandra.faceYaw = Math.PI;
-  sandra.lookTarget = V(SPOTS.coffee.x, 1.38, -6.0);
+  sandra.lookTarget = V(SPOTS.coffee.x, -6.0, 1.38);
 }
 
 // ------------------------------------------------------------------
@@ -331,6 +362,8 @@ async function sitDown(id, p, name, side) {
   });
   guard(id);
   p.lockYaw = false;
+  // Zijn eigen kopje en bestek staan nu voor hem.
+  if (p === tomasz) p.props = { cup: tray.userData.cup, cutlery: tray.userData.cutlery };
 }
 
 // Opstaan van de stoel en hem met de benen naar achteren duwen.
@@ -367,6 +400,8 @@ function resetScene(state) {
   look.uPitch = 0;
   rig.position.copy(PLAYER);
   S.outcome = null;
+  for (const p of cast) p.resetLife();
+  tomasz.props = {};
   for (const p of [marco, dennis, tomasz]) {
     p.clearForced();
     p.cancelWalk();
@@ -509,11 +544,14 @@ async function runIntro(id) {
     [4.4, () => (dennis.lookTarget = headOf(tomasz))],
   ]);
   dennis.lean = 0.1;
-  // Marco grinnikt mee: de blik volgt de spreker.
+  // Marco grinnikt mee: de blik volgt de spreker. Dennis is zo weer aan de beurt.
+  dennis.settle(99);
   lookAtFn(faceOf(marco), 3);
   await say(id, 'ml', [[0.0, () => (marco.lookTarget = tablePoint('marco', 0, 0.4))]]);
 
-  // Dennis draait zich naar de speler en zoekt bijval.
+  // Dennis draait zich naar de speler en zoekt bijval. Vanaf hier tot de keuze is iedereen aan
+  // tafel bij het gesprek: geen slokjes of nek wrijven.
+  for (const p of [marco, dennis, tomasz]) p.settle(99);
   dennis.lookTarget = playerHead;
   lookAtFn(faceOf(dennis), 2.6);
   await wait(0.3);
@@ -529,14 +567,19 @@ async function runIntro(id) {
 
 // Bij de keuze kijken ze alle drie naar de speler.
 function onChoice() {
-  for (const p of [dennis, marco, tomasz]) p.lookTarget = playerHead;
+  for (const p of [dennis, marco, tomasz]) p.settle(99);
+  stagger(runId, [dennis, marco, tomasz], (p) => (p.lookTarget = playerHead), 0.05, 0.35);
   dennis.lean = 0.06;
   // Iets lager kijken, zodat de gezichten boven het keuzepaneel blijven.
   lookAtFn(groupLook([dennis, marco, tomasz], 0.55), 2);
 }
 
 async function runBranch(id, key) {
-  for (const p of [dennis, marco, tomasz]) p.lookTarget = playerHead;
+  stagger(id, [dennis, marco, tomasz], (p) => (p.lookTarget = playerHead));
+  // Na het antwoord van de speler mogen ze weer af en toe iets voor zichzelf doen.
+  later(id, 4, () => {
+    for (const p of [dennis, marco, tomasz]) p.fidgetT = rnd(4, 10);
+  });
   lookAtFn(faceOf(dennis), 3);
   if (key === 'A') await branchA(id);
   else if (key === 'B') await branchB(id);
@@ -553,8 +596,11 @@ async function branchA(id) {
   later(id, 1.6, () => (marco.lookTarget = tablePoint('marco', 0, 0.4)));
   await playerSays(id, 'A');
 
-  // "Pff. Het is maar een grapje, joh." (armen over elkaar)
+  // "Pff. Het is maar een grapje, joh." (armen over elkaar). Eerst diep in: het "pff" is de uitademing.
   dennis.angerTarget = 0.3;
+  dennis.sigh(0.9);
+  await wait(0.55);
+  guard(id);
   dennis.armPose = 'crossed';
   dennis.lean = 0.1;
   await say(id, 'a1', [[1.2, () => (dennis.lookTarget = headOf(marco))]]);
@@ -569,10 +615,12 @@ async function branchA(id) {
 
   // Dennis zucht en geeft toe.
   lookAtFn(faceOf(dennis), 2.4);
-  dennis.inhale(0.6);
   dennis.armPose = null;
   dennis.angerTarget = 0;
   dennis.lean = 0;
+  dennis.sigh(1);
+  await wait(0.9);
+  guard(id);
   await say(id, 'a4', [
     [1.9, () => (dennis.lookTarget = headOf(tomasz))],
     [3.1, () => dennis.jab('l', tablePoint('tomasz', 0, 0.2).setY(0.95), 0.9)],
@@ -673,6 +721,8 @@ async function branchC(id) {
   dennis.lean = 0;
   lookAtFn(faceOf(dennis), 3);
   later(id, 0.9, () => flinch(V(0, 0.07), 0.6, false));
+  // Marco en Tomasz draaien mee zodra Dennis begint op te staan (niet tegelijk).
+  stagger(id, [marco, tomasz], (p) => (p.lookTarget = headOf(dennis)), 0.25, 0.6);
   await standUp(id, dennis, 'dennis');
   dennis.setHands('angry');
 
@@ -691,7 +741,7 @@ async function branchC(id) {
   marco.lookTarget = headOf(dennis);
   await say(id, 'c2', [
     [1.4, () => (marco.lookTarget = playerHead)],
-    [2.3, () => everyoneLooks()],
+    [2.3, () => everyoneLooks(id)],
   ]);
   lookAtFn(faceOf(bg1), 1.6);
   await wait(1.2);
@@ -802,5 +852,5 @@ start({
   update,
   setupAudio,
   updateAudio,
-  debug: { get marco() { return marco; }, get dennis() { return dennis; }, get tomasz() { return tomasz; }, get canteen() { return canteen; } },
+  debug: { get marco() { return marco; }, get dennis() { return dennis; }, get tomasz() { return tomasz; }, get canteen() { return canteen; }, get bg1() { return bg1; }, get bg2() { return bg2; }, get bg3() { return bg3; }, get sandra() { return sandra; } },
 });

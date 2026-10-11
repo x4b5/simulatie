@@ -159,6 +159,8 @@ function seatMarco() {
   marco.root.position.set(0, 0, 0);
   marco.root.rotation.set(0, 0, 0);
   marco.seat = 1;
+  // Aan het stuur: geen eigen handelingen (kin in de hand, nek wrijven …).
+  marco.fidgetOK = false;
   marco.setHands('wheel');
   marco.setAim('l', null);
   marco.setAim('r', null);
@@ -185,6 +187,7 @@ function resetScene(state) {
   sandra.lookTarget = null;
   fl.on = true;
   [marco, sandra].forEach((p) => {
+    p.resetLife();
     p.clearForced();
     p.lockYaw = false;
     p.talk = null;
@@ -309,6 +312,7 @@ async function exitForklift(id) {
   m.setAim('r', null);
   m.clearForced();
   m.lockYaw = false;
+  m.fidgetOK = true;
 }
 
 // Instappen in omgekeerde volgorde: opstappen met de hand aan de stijl, draaien, gaan zitten, motor aan.

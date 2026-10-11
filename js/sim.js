@@ -4,6 +4,7 @@ import { AudioEngine } from './audio.js';
 import { VRUI } from './vrui.js';
 import { LANGS, pair, langDir } from './i18n.js';
 import { ICONS, MOOD_ICON } from './icons.js';
+import { LIFE } from './human.js';
 
 // Gedeeld raamwerk voor de oefeningen ("Bijna geraakt", "Grap in de kantine"):
 // renderer en camera (first person), sequencer in simulatietijd, spreken met lipsync en
@@ -241,6 +242,8 @@ function fakeTalk() {
 export async function say(id, key, cues = []) {
   const line = T.LINES[key];
   const person = scn.person(line.who);
+  // Wie gaat praten, rondt een eigen handeling (slokje, nek wrijven) eerst af.
+  person.settle?.(3);
   // Eerst zichtbaar inademen, dan pas spreken.
   person.inhale(0.32);
   await wait(0.22);
@@ -394,6 +397,8 @@ export function setPhase(p) {
   S.phase = p;
   document.body.dataset.phase = p;
   const frozen = p === 'choice';
+  // Bij de keuze begint niemand aan iets nieuws (kopje pakken, nek wrijven …): rust in beeld.
+  LIFE.quiet = frozen;
   S.worldScaleTarget = frozen ? 0.12 : 1;
   S.exposureTarget = frozen ? 0.85 : p === 'reflect' ? 0.85 : 1;
   $('#skip').hidden = p !== 'intro';

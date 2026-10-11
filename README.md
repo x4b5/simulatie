@@ -210,6 +210,32 @@ boosheid komt. Terwijl de speler antwoordt reageert hij al non-verbaal: ontspann
 ogen rollen en smalend grijnzen (B), of even terugdeinzen en daarna bozer worden (C). De speler
 deinst zelf terug bij het remmen en zet een stap achteruit als Marco te dichtbij komt.
 
+### Lichaamstaal (`js/human.js`)
+
+Niemand staat of zit stil als een standbeeld, maar alles blijft ingetogen:
+
+- **Ademen:** borst en schouders gaan zichtbaar maar klein op en neer. Na boosheid, schreeuwen of
+  lachen sneller en dieper, en pas na een tijd weer rustig. Zuchten (`sigh()`) op passende momenten,
+  bijvoorbeeld bij Dennis vóór "Pff" en "Oké, oké" en bij Marco als hij opgelucht is.
+- **Gewicht en houding:** om de 6–15 s verplaatst iemand het gewicht een fractie; zittend soms iets
+  achterover of iets meer op de onderarmen.
+- **Eigen handelingen**, op willekeurige momenten en per persoon anders: slokje koffie (het kopje gaat
+  echt mee naar de mond en terug op zijn plek), nek wrijven, kin in de hand, langs de neus, onderarm
+  krabben, mouw goedtrekken, bestek verleggen, telefoon (de collega die alleen zit). Arm met IK.
+  Nooit bij de keuze (`LIFE.quiet`), niet tijdens praten, niet als de armen al iets doen en niet bij
+  boosheid of schrik. Het scenario kan ze uitstellen met `settle(seconden)`.
+- **Kijken:** de ogen springen eerst naar het nieuwe doel, het hoofd volgt 100–200 ms later met een
+  zachte aanloop en schiet een fractie door; de romp volgt nog later. Gerekend in hoeken t.o.v. het
+  lichaam, zodat het hoofd nooit omklapt als het doel achter iemand langs gaat. Tijdens het luisteren
+  kleine, trage hoofdbewegingen en oogsprongetjes tussen de ogen en de mond van de spreker.
+- **Gebaren:** aanloop (arm even terug, schouder op) → slag (iets voorbij het doel) → vasthouden →
+  rustig ontspannen. Schouder en bovenrug doen mee, de pols ijlt na. Knikken en schudden zacht in- en
+  uitgezet, en nooit twee keer precies hetzelfde. Animaties vloeien in elkaar over met een S-curve.
+- **Samen reageren:** als meer mensen tegelijk reageren (kijken, omdraaien) zit er 80–400 ms tussen
+  (`stagger` in `js/kantine.js`).
+- **Lopen:** zacht op gang komen en afremmen, iets langzamer door bochten, voetstappen op het ritme
+  van de loopanimatie, en kijken waar je heen loopt.
+
 ### In- en uitstappen
 
 Uitstappen: contact uit, zijwaarts draaien, opstaan (motion capture) met de hand aan de stijl,

@@ -335,6 +335,19 @@ function cupMesh(color = 0xf4f2ee) {
   return g;
 }
 
+// Telefoon (plat op tafel, scherm omhoog). Oorsprong: midden van de onderkant.
+export function phoneMesh() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new RoundedBoxGeometry(0.074, 0.009, 0.152, 2, 0.004), std(0x1d2024, 0.35));
+  body.position.y = 0.0045;
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.066, 0.138), new THREE.MeshStandardMaterial({ color: 0x0d1418, roughness: 0.15, emissive: 0x2a3a48, emissiveIntensity: 0.6 }));
+  screen.rotation.x = -Math.PI / 2;
+  screen.position.y = 0.0092;
+  g.add(body, screen);
+  g.traverse((n) => n.isMesh && (n.castShadow = true));
+  return g;
+}
+
 function plateMesh(food) {
   const m = materials();
   const g = new THREE.Group();
@@ -412,17 +425,20 @@ export function makeTray({ food = 'stew', cup = true, bottle = false, color = 'b
   tray.castShadow = true;
   tray.receiveShadow = true;
   g.add(tray);
-  // Indeling vanuit wie aan het blad zit (+z is van hem af): bord links, bestek, kopje achteraan.
+  // Indeling vanuit wie aan het blad zit (+z is van hem af): bord links, bestek, kopje vooraan (binnen handbereik).
   const plate = plateMesh(food);
   plate.position.set(-0.08, 0.016, -0.02);
   g.add(plate);
   const cut = cutleryMesh();
   cut.position.set(0.1, 0.016, -0.02);
   g.add(cut);
+  g.userData.cutlery = cut;
   if (cup) {
+    // Kopje vooraan, binnen handbereik van wie aan het blad zit.
     const c = cupMesh();
-    c.position.set(0.17, 0.016, 0.11);
+    c.position.set(0.18, 0.016, -0.07);
     g.add(c);
+    g.userData.cup = c;
   }
   if (bottle) {
     const b = bottleMesh();
@@ -1004,12 +1020,15 @@ export function buildCanteen(scene, renderer) {
     world.add(obj);
     return obj;
   };
+  // Wat iemand zelf kan pakken of verleggen (kopje, bestek, telefoon), per zitplaats.
+  const props = {};
+  const own = (seat, tray) => (props[seat] = { cup: tray.userData.cup || null, cutlery: tray.userData.cutlery || null });
   onTable(makeTray({ food: 'bread', cup: true }), 'player', 0, 0.36);
-  onTable(makeTray({ food: 'stew', cup: true, color: 'grey' }), 'dennis', 0.02, 0.54, 0.05);
-  onTable(makeTray({ food: 'soup', cup: true }), 'marco', -0.03, 0.54, -0.06);
-  onTable(makeTray({ food: 'stew', cup: false, bottle: true, color: 'grey' }), 'bg1', 0, 0.54);
-  onTable(makeTray({ food: 'bread', cup: true }), 'bg2', 0, 0.54, 0.1);
-  onTable(cupMesh(), 'bg3', 0.12, 0.28);
+  own('dennis', onTable(makeTray({ food: 'stew', cup: true, color: 'grey' }), 'dennis', 0.02, 0.54, 0.05));
+  own('marco', onTable(makeTray({ food: 'soup', cup: true }), 'marco', -0.03, 0.54, -0.06));
+  own('bg1', onTable(makeTray({ food: 'stew', cup: false, bottle: true, color: 'grey' }), 'bg1', 0, 0.54));
+  own('bg2', onTable(makeTray({ food: 'bread', cup: true }), 'bg2', 0, 0.54, 0.1));
+  props.bg3 = { cup: onTable(cupMesh(), 'bg3', 0.12, 0.28), phone: onTable(phoneMesh(), 'bg3', -0.14, 0.3, 0.25) };
   onTable(cupMesh(0x2f6f78), 'e4', 0.1, 0.3);
   onTable(bottleMesh(), 'e8', -0.15, 0.25);
 
@@ -1032,7 +1051,7 @@ export function buildCanteen(scene, renderer) {
     world.add(p);
   }
 
-  return { group: world, chairs, door, update: (dt, t) => updates.forEach((u) => u(dt, t)) };
+  return { group: world, chairs, door, props, update: (dt, t) => updates.forEach((u) => u(dt, t)) };
 }
 
 // Licht in de kantine: zon door de ramen (links), plafondlampen en een zacht hemellicht.

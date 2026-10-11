@@ -808,5 +808,5 @@ start({
   update,
   setupAudio,
   updateAudio,
-  debug: { get marco() { return marco; }, get dennis() { return dennis; }, get tomasz() { return tomasz; }, get canteen() { return canteen; } },
+  debug: { get marco() { return marco; }, get dennis() { return dennis; }, get tomasz() { return tomasz; }, get canteen() { return canteen; }, get bg1() { return bg1; }, get bg2() { return bg2; }, get bg3() { return bg3; }, get sandra() { return sandra; } },
 });

@@ -43,22 +43,32 @@ const _c = new THREE.Vector3();
 
 async function makeCast() {
   canteen = buildCanteen(scene, renderer);
-  const load = (model, code, anims = ANIMS) => Human.load({ model, code, anims });
+  const load = (model, code, anims = ANIMS, opts = {}) => Human.load({ model, code, anims, ...opts });
+  // In de lunchpauze: geen hesje, geen handschoenen, geen portofoon. De 'k'-texturen zijn kopieën
+  // van de lichaamstexturen met de overall in plaats van het hesje en blote handen.
+  const VEST_PARTS = [
+    [0.4, 0.85, 0.615, 0.995], // portofoon, microfoon en snoer
+    [0.465, 0.42, 0.535, 0.485], // sluitlusje van het hesje
+  ];
+  const lunch = (bodyCode) => ({ bodyCode, hideUV: VEST_PARTS });
   // Realistische personages (Microsoft Rocketbox, MIT-licentie).
   [marco, dennis, tomasz, bg1, bg2, bg3, sandra] = await Promise.all([
-    load('models/marco.fbx', 'm108'),
-    load('models/dennis.fbx', 'm107'),
+    load('models/marco.fbx', 'm108', ANIMS, lunch('m108k')),
+    load('models/dennis.fbx', 'm107', ANIMS, lunch('m107k')),
     load('models/tomasz.fbx', 'm105'),
     load('models/collega2.fbx', 'm102'),
     load('models/collega4.fbx', 'm103'),
     load('models/collega5.fbx', 'm104'),
-    load('models/sandra.fbx', 'f101', 'models/anim_f'),
+    load('models/sandra.fbx', 'f101', 'models/anim_f', lunch('f101k')),
   ]);
   cast = [marco, dennis, tomasz, bg1, bg2, bg3, sandra];
-  // Tomasz heeft in de pauze geen gereedschap bij zich: de duimstok in zijn gordel prikte door het tafelblad.
-  tomasz.root.traverse((n) => {
-    if (n.isMesh) for (const m of [].concat(n.material)) if (/tools/i.test(m.name)) m.visible = false;
-  });
+  // Niemand heeft in de pauze gereedschap bij zich (gordel, tasjes, duimstok; de duimstok van Tomasz
+  // prikte ook door het tafelblad).
+  for (const p of cast) {
+    p.root.traverse((n) => {
+      if (n.isMesh) for (const m of [].concat(n.material)) if (/tools/i.test(m.name)) m.visible = false;
+    });
+  }
   for (const p of cast) {
     scene.add(p.root);
     p.seatOffset = 0;

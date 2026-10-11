@@ -107,7 +107,11 @@ Keuze (tijd staat stil, alle drie kijken naar de speler)
 Nabespreking ── dezelfde 4 kaartjes als in Bijna geraakt. Geen punten.
 ```
 
-- **Personages:** Dennis (oranje hesje), Tomasz (blauwe overall) en Marco uit Bijna geraakt.
+- **Personages:** Dennis, Tomasz en Marco uit Bijna geraakt. Het is lunchpauze: niemand draagt
+  een hesje, handschoenen, portofoon of gereedschapsgordel. Daarvoor zijn er kantineversies van de
+  lichaamstexturen (`models/tex/m108k_*`, `m107k_*`, `f101k_*`: overall in plaats van hesje, blote
+  handen in de huidskleur van het gezicht); `Human.load` kiest die met `bodyCode` en verbergt losse
+  onderdelen (portofoon, sluitlusje) met `hideUV`. Bijna geraakt gebruikt de originele texturen.
   Op de achtergrond zitten collega's aan andere tafels en haalt teamleider Sandra koffie;
   in de ruzie kijken ze allemaal om.
 - **Zitten aan tafel:** motion capture van mensen die aan een tafel zitten (onderarmen op het

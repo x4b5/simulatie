@@ -195,6 +195,36 @@ function tagVertices(mesh) {
   g.setAttribute('aTag', new THREE.BufferAttribute(tag, 2));
 }
 
+// Verbergt lichaamsdriehoeken waarvan alle hoekpunten in een van de UV-rechthoeken liggen
+// (rechthoek [u0, y0, u1, y1], y van boven in de textuur): de hoekpunten vallen samen.
+function hideBodyParts(mesh, mats, boxes) {
+  const g = mesh.geometry;
+  const uv = g.attributes.uv;
+  const pos = g.attributes.position;
+  const idx = g.index;
+  const vi = (i) => (idx ? idx.getX(i) : i);
+  const inBox = (v) => {
+    const x = uv.getX(v);
+    const y = 1 - uv.getY(v);
+    return boxes.some(([u0, y0, u1, y1]) => x >= u0 && x <= u1 && y >= y0 && y <= y1);
+  };
+  const groups = g.groups.length ? g.groups : [{ start: 0, count: idx ? idx.count : pos.count, materialIndex: 0 }];
+  for (const gr of groups) {
+    if (!/body/i.test(mats[gr.materialIndex]?.name || '') || /head|tools|helmet/i.test(mats[gr.materialIndex].name)) continue;
+    for (let i = gr.start; i < gr.start + gr.count; i += 3) {
+      const a = vi(i);
+      const b = vi(i + 1);
+      const c = vi(i + 2);
+      if (!(inBox(a) && inBox(b) && inBox(c))) continue;
+      for (const v of [b, c]) {
+        pos.setXYZ(v, pos.getX(a), pos.getY(a), pos.getZ(a));
+        for (const m of g.morphAttributes.position || []) m.setXYZ(v, m.getX(a), m.getY(a), m.getZ(a));
+      }
+    }
+  }
+  pos.needsUpdate = true;
+}
+
 // Huid: licht dringt een eindje onder de huid en komt rood terug. Benadering: per kleurkanaal
 // "omwikkelde" belichting (rood loopt verder door voorbij de schaduwgrens dan blauw).
 const SKIN_LIGHTS = THREE.ShaderChunk.lights_physical_pars_fragment.replace(
@@ -277,15 +307,18 @@ function liveSkin(mat, head) {
 
 export class Human {
   // anims: één animatieset of een lijst sets (de clips worden samengevoegd).
-  static async load({ model, code, anims, facial = true, badge = null }) {
+  // Optioneel: bodyCode = andere textuurset voor kleding en handen (bijv. 'm108k': zonder hesje en
+  // handschoenen), hideUV = rechthoeken [u0, y0, u1, y1] in textuurcoördinaten (y van boven) waarvan
+  // de lichaamsdriehoeken verborgen worden (losse onderdelen zoals een portofoon).
+  static async load({ model, code, anims, facial = true, badge = null, bodyCode = null, hideUV = null }) {
     const manager = new THREE.LoadingManager();
     // Texturen uit het FBX-bestand negeren: we zetten zelf PBR-materialen.
     manager.setURLModifier((u) => (/\.tga$/i.test(u) ? 'data:,' : u));
     const [obj, ...sets] = await Promise.all([new FBXLoader(manager).loadAsync(model), ...[].concat(anims).map(loadAnimSet)]);
-    return new Human(obj, Object.assign({}, ...sets), { code, facial, badge });
+    return new Human(obj, Object.assign({}, ...sets), { code, facial, badge, bodyCode, hideUV });
   }
 
-  constructor(obj, clips, { code, facial }) {
+  constructor(obj, clips, { code, facial, bodyCode, hideUV }) {
     this.root = new THREE.Group();
     this.model = obj;
     obj.scale.setScalar(0.01);
@@ -304,8 +337,8 @@ export class Human {
           if (part === 'helmet') return new THREE.MeshBasicMaterial({ visible: false });
           const common = {
             name: m.name,
-            map: tex(`${dir}${code}_${part}_color.jpg`, true),
-            normalMap: tex(`${dir}${code}_${part}_normal.jpg`, false),
+            map: tex(`${dir}${(part === 'body' && bodyCode) || code}_${part}_color.jpg`, true),
+            normalMap: tex(`${dir}${(part === 'body' && bodyCode) || code}_${part}_normal.jpg`, false),
             metalness: 0,
           };
           // Huid: zachte, warme glans aan de randen (sheen) geeft een minder plastic gezicht.
@@ -325,6 +358,7 @@ export class Human {
           if (part !== 'tools') liveSkin(mat, part === 'head');
           return mat;
         });
+        if (hideUV) hideBodyParts(n, mats, hideUV);
         n.material = Array.isArray(n.material) ? mats : mats[0];
         tagVertices(n);
         if (n.morphTargetDictionary) this._pruneMorphs(n);

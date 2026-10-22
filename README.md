@@ -168,17 +168,30 @@ Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten
   materiaal met doorzichtigheid (`m009_opacity_color.png`); `Human.load` herkent dat vanzelf.
 - **Klimmen (procedureel):** er bestaat geen motion capture van klimmen. Voeten en handen worden
   met IK op hun steunpunt gezet (`pinFoot` en `grip` in `js/human.js`): de enkel op de ligger,
-  de trede of de vloer, de pols om de staander, over de ligger of op de leuning. Het scenario
-  beweegt die punten met een boogje (voet even weg van de stelling, tenen omlaag) en zegt waar
-  het lichaam ongeveer moet zijn; per beeld zakt het lichaam zo ver als nodig om elke voet
-  echt te halen (`holdRoot` in `js/henk.js`). Zo zweeft er nooit een voet en zakt Henk bij het
-  afstappen door de knie van zijn steunbeen. Afdalen gaat naar de stelling toe, met steeds drie
-  steunpunten, via de eerste ligger, en het laatste stuk zonder te springen; na elke stap gaan de
-  handen mee omlaag. Tijdens het afdalen staat de speler midden in de gang (`P.watch`), zodat de
-  staander naast Henk in beeld is en niet achter zijn hoofd.
-- **Bijna-val (B):** de doos kantelt over de rand en valt (eenvoudige val met tollen en
-  stuiteren), Henks rechtervoet schiet van de ligger, hij grijpt met twee handen de staander en
-  hangt even scheef. Geluid: natrillende ligger, doos op beton, hartslag; de speler deinst terug.
+  de trede of de vloer, de handen met de handpalm op het staal. Het scenario beweegt die punten
+  met een boogje (voet even weg van de stelling, tenen omlaag) en zegt waar het lichaam ongeveer
+  moet zijn; per beeld zakt het lichaam zo ver als nodig om elke voet echt te halen (`holdRoot`
+  in `js/henk.js`). Zo zweeft er nooit een voet. Elke stap omlaag gaat zoals op een ladder
+  (`stepTo`): eerst het gewicht naar het steunbeen (bekken erboven, heup aan de zwaaikant iets
+  omlaag), dan door de knie zakken terwijl de heupen buigen en iets naar achteren gaan en de romp
+  naar de stelling leunt (`hips` in `js/human.js`), even stil als de voet staat, dan het gewicht
+  erop. Afdalen gaat naar de stelling toe, met steeds drie steunpunten, via de eerste ligger, en
+  het laatste stuk zonder te springen. Tijdens het afdalen staat de speler midden in de gang
+  (`P.watch`), zodat de staander naast Henk in beeld is en niet achter zijn hoofd.
+- **Handen (`js/hands.js`):** elke greep is een contact van de handpalm met een vlak: om de
+  staander (handpalm op de voorkant of binnenkant, vingers om de rand), plat op de ligger (duim
+  onder de voorrand), van bovenaf om de leuning, met de vingers over de bovenrand van de doos, of
+  met twee handpalmen laag tegen de zijkanten van de doos. Pols en handstand volgen elk beeld uit
+  het voorwerp, dus een gedragen doos zit vast in de handen. Dragen gaat rustig, met de doos
+  tegen het lichaam en Henk iets achterover (het gewicht).
+- **Handen van de speler:** bij het duwen van de rolsteiger (A) en het aanpakken (B) komen de
+  armen van de speler in beeld (blauwe werkmouwen, dezelfde grepen als bij Henk). In VR niet:
+  daar zijn je eigen handen en controllers er.
+- **Bijna-val (B):** Henk trekt de doos aan de bovenrand over de rand van de doos eronder; die
+  kantelt en valt als star lichaam (`js/boxphys.js`): hij botst met het staal, met Henk (capsules
+  om romp, armen en benen) en de speler, stuitert op de vloer en blijft liggen. Henks rechtervoet
+  schiet van de ligger, hij grijpt met twee handen de staander en hangt even scheef. Geluid:
+  natrillende ligger, doos op beton, hartslag; de speler trekt zijn handen terug en deinst terug.
 - **Geluid:** ruimtelijke stemmen met de galm van de hal, metalen tikken van voeten op liggers en
   treden, zwenkwielen van de rolsteiger, de heftruck van Marco.
 - **Voor de docent:** waarom is het lastig iets te zeggen tegen iemand die ouder is en meer
@@ -197,7 +210,9 @@ Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten
 | Pictogrammen | `js/icons.js` |
 | Hoe sterk gezicht en gebaren zijn (0 = neutraal, 1 = vol) | `EXPRESSION` in `js/human.js` |
 | Volgorde, timing en gebaren per zin | `js/main.js`, `js/kantine.js` en `js/henk.js` (`runIntro`, `branchA/B/C`) |
-| Klimmen en afdalen (steunpunten, tempo) | `climbDown`, `climbSteiger` en `slip` in `js/henk.js` |
+| Klimmen en afdalen (steunpunten, tempo) | `climbDown`, `stepTo`, `climbSteiger` en `slip` in `js/henk.js` |
+| Grepen van handen (staander, ligger, leuning, doos) en de armen van de speler | `js/hands.js`, grepen in `js/henk.js` |
+| De vallende doos (botsen, stuiteren) | `js/boxphys.js` |
 | Gedeeld raamwerk: camera, ondertitels, keuze, nabespreking, talen, VR | `js/sim.js` |
 | Magazijn (stellingen, borden, vloermarkering) | `js/world.js` |
 | Kantine (tafels, stoelen, toonbank, ramen, licht) | `js/canteen.js` |
@@ -238,10 +253,10 @@ Zonder lipsync-tijdlijn werkt een zin ook: dan beweegt de mond alleen op het vol
   (bedrijfskleding, logo op het hesje) moeten de texturen in `models/tex/` worden aangepast.
 - In de kantine blijven de woorden van de grap ("een ui in mijn huis") in elke vertaling
   Nederlands; anders is niet te volgen waar de grap over gaat.
-- Klimmen is met IK nagebootst, niet opgenomen: de houding van romp en armen komt uit een
-  gewone sta-animatie. Van dichtbij is dat minder soepel dan echte motion capture.
-- De speler heeft geen eigen handen in beeld: bij het duwen van de rolsteiger (A) en het
-  aanpakken (B) zie je alleen de camera bewegen.
+- Klimmen is met IK nagebootst, niet opgenomen: bekken, heupen en romp bewegen procedureel
+  bovenop een gewone sta-animatie. Van dichtbij is dat minder soepel dan echte motion capture.
+- De handen van de speler zijn alleen te zien als je naar ze kijkt: bij het duwen kijk je even
+  naar de leuning, daarna weer naar Henk en de stelling.
 - De lipsync volgt de woorden klank voor klank, maar de omzetting van spelling naar
   mondstand werkt met vuistregels voor het Nederlands. Bij leenwoorden ("scanner")
   is dat soms een benadering.

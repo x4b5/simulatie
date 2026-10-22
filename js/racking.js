@@ -541,11 +541,12 @@ export function buildAisle(scene) {
 
   // ---------- De doos bovenin (vak 12-04, derde ligger) ----------
   const lv3 = levels[2];
-  const under = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.6), cartonMats[0]);
-  under.position.set(HENK_BAY.x1 - 0.62, lv3 + 0.256, faceN + 0.33);
-  under.rotation.y = 0.03;
+  // De doos staat op een lagere doos: de bovenrand (2,76 m) kan Henk vanaf de tweede ligger net
+  // met zijn vingers haken.
+  const under = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.6), cartonMats[0]);
+  under.position.set(HENK_BAY.x1 - 0.62, lv3 + 0.156, faceN + 0.33);
   const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.46), cartonMats[1]);
-  box.position.set(HENK_BAY.x1 - 0.66, lv3 + 0.506 + 0.15, faceN + 0.38);
+  box.position.set(HENK_BAY.x1 - 0.66, lv3 + 0.306 + 0.15, faceN + 0.38);
   box.rotation.y = -0.05;
   for (const m of [under, box]) {
     m.castShadow = true;
@@ -567,5 +568,5 @@ export function buildAisle(scene) {
     obj.add(b);
   }
 
-  return { group, box, steiger, cart };
+  return { group, box, under, steiger, cart };
 }

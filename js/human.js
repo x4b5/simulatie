@@ -48,8 +48,8 @@ const _ikE = new THREE.Vector3();
 const _ikT = new THREE.Vector3();
 const _ikPole = new THREE.Vector3();
 const _qF = new THREE.Quaternion();
-// As waarom vingerkootjes krommen (lokaal, Rocketbox/Biped).
-const GRIP_AXIS = new THREE.Vector3(0, 0, -1);
+// Vingers krommen naar de handpalm toe: draaiing om deze as van elk vingerkootje.
+const GRIP_AXIS = new THREE.Vector3(0, 0, 1);
 // Hoe ver de ogen in de oogkas mogen draaien t.o.v. het hoofd (rad): opzij, omhoog, omlaag.
 // Wat verder ligt, neemt het hoofd over; anders zie je alleen nog oogwit.
 const EYE_YAW = 0.35;
@@ -494,6 +494,7 @@ export class Human {
     this.torsoFollow = 0; // deel van de kijkrichting dat de romp meedraait (zittend)
     this.upright = false; // hoofd draaien zonder te kantelen (zie _look)
     this.lean = 0; // romp achterover (+) of naar voren (-), in radialen
+    this.hips = { pitch: 0, roll: 0 }; // bekken kantelen (zie _hipsBend)
     this._lean = 0;
     this.armPose = null; // vaste armhouding bovenop de animatie (zie ARM_POSES)
     this.armPoseW = 0;
@@ -627,7 +628,14 @@ export class Human {
         a.handSide = f(1).position.clone().sub(f(4).position);
         a.handSide.addScaledVector(a.handAxis, -a.handSide.dot(a.handAxis)).normalize();
         a.fingers = [];
-        a.hand.traverse((b) => b !== a.hand && /Finger/.test(b.name) && a.fingers.push([b, b.quaternion.clone()]));
+        // [bot, ruststand, duim?, kootje (0 = bij de knokkel, 1 = midden, 2 = top)]
+        a.hand.traverse((b) => {
+          const m = b !== a.hand && /Finger(\d)(\d?)$/.exec(b.name);
+          if (m) a.fingers.push([b, b.quaternion.clone(), m[1] === '0', m[2] ? +m[2] : 0]);
+        });
+        // Afstand pols → knokkels (voor een hand met de handpalm op een vlak, zie grip).
+        a.hand.getWorldPosition(_v);
+        a.knuckle = f(2).getWorldPosition(_v2).distanceTo(_v);
       }
     }
   }
@@ -773,17 +781,22 @@ export class Human {
 
   // Hand ('l' of 'r') met de pols op punt p (vasthouden aan een staander, ligger of leuning), of
   // loslaten met null. Net als bij pinFoot mag p meebewegen.
-  // ori: stand van de hand als [richting vingers, richting duimkant] in de assen van het lichaam
-  // (x = links, y = omhoog, z = vooruit); een nieuwe stand wordt zacht overgenomen.
-  grip(side, p, { instant = false, ori = null } = {}) {
+  // ori: functie (vingers, duimkant) die elk beeld beide richtingen van de hand in de wereld invult
+  // (zie js/hands.js: de handpalm op een vlak van een staander, leuning of doos).
+  // curl: hoe ver de vingers krommen per kootje [knokkel, midden, top] (radialen), thumb: de duim.
+  // pole: richting van de elleboog in de assen van het lichaam (standaard opzij, omlaag, iets terug).
+  grip(side, p, { instant = false, ori = null, curl = null, thumb = null, pole = null } = {}) {
     const g = this.grips[side];
     if (p) g.p = p;
     g.on = !!p;
     if (ori) g.ori = ori;
+    if (curl !== null) g.curl = [].concat(curl);
+    if (thumb !== null) g.thumb = thumb;
+    if (pole) g.pole = pole;
     if (instant) {
       g.w.x = p ? 1 : 0;
       g.w.v = 0;
-      g.f = g.t = null;
+      g.c = null;
     }
   }
 
@@ -818,9 +831,12 @@ export class Human {
     this._lookWs.x = this._lookWs.v = 0;
     this.lookW = 0;
     this._yawV = 0;
+    this.hips.pitch = this.hips.roll = 0;
     for (const s of ['l', 'r']) {
       this.pinFoot(s, null, { instant: true });
       this.grip(s, null, { instant: true });
+      const g = this.grips[s];
+      g.curl = g.thumb = g.pole = g.ori = null;
     }
   }
 
@@ -985,6 +1001,7 @@ export class Human {
     else for (let i = 0; i < this._allBones.length; i++) this._animQ[i].copy(this._allBones[i].quaternion);
     this._rootMotion();
     this.root.updateMatrixWorld(true);
+    this._hipsBend(dt); // bekken kantelen (klimmen)
     this._legs(dt); // voeten op een sport of ligger
 
     // Procedurele lagen bovenop de animatie.
@@ -1620,6 +1637,20 @@ export class Human {
     a.fore.updateMatrixWorld(true);
   }
 
+  // Bekken kantelen bovenop de animatie (klimmen, afstappen): pitch = heupen buigen (+ = voorover),
+  // roll = bekken scheef (+ = linkerheup omlaag). De rug buigt een deel terug, zodat de borst
+  // rustiger blijft dan het bekken. Alleen met vastgezette voeten (pinFoot) zinvol: de benen
+  // worden daarna met IK opnieuw naar de voeten gezet.
+  _hipsBend(dt) {
+    const st = (this._hipsS ||= { p: sp0(), r: sp0() });
+    const p = spring(st.p, this.hips.pitch, 4.5, 1, dt);
+    const r = spring(st.r, this.hips.roll, 4.5, 1, dt);
+    if (Math.abs(p) + Math.abs(r) < 1e-4 || !this.bones.pelvis) return;
+    this._bodyAxes();
+    this._rotBody(this.bones.pelvis, p, r, 0);
+    if (this.bones.spine1) this._rotBody(this.bones.spine1, -p * 0.35, -r * 0.75, 0);
+  }
+
   // Voeten op hun punt (pinFoot): heup → knie → enkel met IK, de knie naar voren en iets naar
   // buiten. De voet houdt de stand uit de animatie (plat), eventueel met de tenen omlaag (pitch).
   _legs(dt) {
@@ -1801,19 +1832,22 @@ export class Human {
       this.bones.arm[s].up.getWorldPosition(_v);
       const high = THREE.MathUtils.clamp((g.p.y - _v.y) / 0.45, 0, 1) * w * 0.1;
       if (high > 1e-3) this._shoulders(s === 'l' ? high : 0, s === 'r' ? high : 0);
-      this._ik(s, g.p, _ikPole.copy(_bx).multiplyScalar(k * 0.7).addScaledVector(_by, -1).addScaledVector(_bz, -0.25), w);
+      const pl = g.pole || [0.7, -1, -0.25];
+      this._ik(s, g.p, _ikPole.copy(_bx).multiplyScalar(k * pl[0]).addScaledVector(_by, pl[1]).addScaledVector(_bz, pl[2]), w);
       const a = this.bones.arm[s];
       if (g.ori && a.handAxis) {
-        const kOri = g.f ? 1 - Math.exp(-8 * dt) : 1;
-        g.f = (g.f || new THREE.Vector3()).lerp(_v.fromArray(g.ori[0]).normalize(), kOri).normalize();
-        g.t = (g.t || new THREE.Vector3()).lerp(_v.fromArray(g.ori[1]).normalize(), kOri).normalize();
-        this.root.getWorldQuaternion(_qRoot);
-        this._orientBone(a.hand, a.handAxis, a.handSide, _f.copy(g.f).applyQuaternion(_qRoot), _r.copy(g.t).applyQuaternion(_qRoot), w);
+        g.ori(_f, _r);
+        this._orientBone(a.hand, a.handAxis, a.handSide, _f.normalize(), _r.normalize(), w);
       }
-      // Vingers om de staander of leuning: elk kootje een stuk krommer dan in rust (duim minder).
-      for (const [b, rest] of a.fingers || []) {
-        const thumb = /Finger0/.test(b.name);
-        _q.copy(rest).multiply(_q2.setFromAxisAngle(GRIP_AXIS, thumb ? 0.35 : 0.95));
+      // Vingers om de staander, ligger, leuning of doos: elk kootje krommer dan in rust. De kromming
+      // volgt zacht (vingers sluiten en openen niet in één beeld).
+      const want = g.curl || [0.95, 0.95, 0.95];
+      g.c = g.c || [want[0], want[1] ?? want[0], want[2] ?? want[0], g.thumb ?? 0.35];
+      const kc = 1 - Math.exp(-12 * dt);
+      for (let j = 0; j < 3; j++) g.c[j] += ((want[j] ?? want[0]) - g.c[j]) * kc;
+      g.c[3] += ((g.thumb ?? 0.35) - g.c[3]) * kc;
+      for (const [b, rest, thumb, j] of a.fingers || []) {
+        _q.copy(rest).multiply(_q2.setFromAxisAngle(GRIP_AXIS, thumb ? g.c[3] : g.c[j]));
         b.quaternion.slerp(_q, w);
       }
     }
@@ -1828,8 +1862,9 @@ export class Human {
       hand.getWorldQuaternion(_q);
       _q.premultiply(_q4);
       const hq = this._handQ[s];
-      if (!hq || hq.angleTo(_q) > 0.8) {
-        this._handQ[s] = _q.clone();
+      // Een hand die iets vasthoudt ijlt niet na: die zit vast aan de staander, leuning of doos.
+      if (!hq || hq.angleTo(_q) > 0.8 || (this.grips[s].on && this.grips[s].w.x > 0.6)) {
+        this._handQ[s] = hq ? hq.copy(_q) : _q.clone();
         continue;
       }
       hq.slerp(_q, kl);

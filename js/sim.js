@@ -987,6 +987,7 @@ function loop() {
   updatePlayer(dt);
   scn.update(dt, wdt);
   updateCamera(dt);
+  scn.lateUpdate?.(dt, wdt);
   updateAudio(dt);
   vrui.update(dt);
   tickKaraoke();
@@ -1000,7 +1001,8 @@ function loop() {
 //   texts: { UI, LINES, CHOICES, OUTCOMES }, choiceIcon, subColors, lineEmo,
 //   lipsync: url, audioDir: map met stemopnames, eye: ooghoogte (m), seatedVR: speler zit,
 //   person(who), build(), reset(state), intro(id), onChoice(), branch(id, key),
-//   update(dt, wdt), setupAudio(), updateAudio(dt, camPos), debug: extra testhaken }
+//   update(dt, wdt), lateUpdate(dt, wdt): na de camera (dingen die aan de speler vastzitten),
+//   setupAudio(), updateAudio(dt, camPos), debug: extra testhaken }
 export async function start(scenario) {
   scn = scenario;
   T = scenario.texts;

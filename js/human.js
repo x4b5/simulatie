@@ -47,6 +47,9 @@ const _ikP = new THREE.Vector3();
 const _ikE = new THREE.Vector3();
 const _ikT = new THREE.Vector3();
 const _ikPole = new THREE.Vector3();
+const _qF = new THREE.Quaternion();
+// As waarom vingerkootjes krommen (lokaal, Rocketbox/Biped).
+const GRIP_AXIS = new THREE.Vector3(0, 0, -1);
 // Hoe ver de ogen in de oogkas mogen draaien t.o.v. het hoofd (rad): opzij, omhoog, omlaag.
 // Wat verder ligt, neemt het hoofd over; anders zie je alleen nog oogwit.
 const EYE_YAW = 0.35;
@@ -378,8 +381,22 @@ export class Human {
         n.receiveShadow = true;
         n.frustumCulled = false;
         const mats = [].concat(n.material).map((m) => {
-          const part = /head/i.test(m.name) ? 'head' : /helmet/i.test(m.name) ? 'helmet' : /tools/i.test(m.name) ? 'tools' : 'body';
+          const part = /head/i.test(m.name) ? 'head' : /helmet/i.test(m.name) ? 'helmet' : /tools/i.test(m.name) ? 'tools' : /opacity/i.test(m.name) ? 'opacity' : 'body';
           if (part === 'helmet') return new THREE.MeshBasicMaterial({ visible: false });
+          if (part === 'opacity') {
+            // Haarplukjes langs de haargrens (modellen "with opacity"): textuur met doorzichtigheid.
+            // Alpha-to-coverage geeft met anti-aliasing zachte randen zonder sorteerproblemen.
+            return new THREE.MeshStandardMaterial({
+              name: m.name,
+              map: tex(`${dir}${code}_opacity_color.png`, true),
+              alphaTest: 0.4,
+              alphaToCoverage: true,
+              side: THREE.DoubleSide,
+              roughness: 0.7,
+              metalness: 0,
+              envMapIntensity: 0.5,
+            });
+          }
           const common = {
             name: m.name,
             map: tex(`${dir}${(part === 'body' && bodyCode) || code}_${part}_color.jpg`, true),
@@ -429,6 +446,10 @@ export class Human {
       arm: {
         l: { up: B('Bip01_L_UpperArm'), fore: B('Bip01_L_Forearm'), hand: B('Bip01_L_Hand') },
         r: { up: B('Bip01_R_UpperArm'), fore: B('Bip01_R_Forearm'), hand: B('Bip01_R_Hand') },
+      },
+      leg: {
+        l: { up: B('Bip01_L_Thigh'), fore: B('Bip01_L_Calf'), foot: B('Bip01_L_Foot') },
+        r: { up: B('Bip01_R_Thigh'), fore: B('Bip01_R_Calf'), foot: B('Bip01_R_Foot') },
       },
     };
 
@@ -530,6 +551,9 @@ export class Human {
     this._nod = null;
     this._shake = null;
     this.aimS = { l: sp0(), r: sp0() };
+    // Klimmen: voeten (enkels) en handen vast op een punt in de wereld, met IK (zie pinFoot, grip).
+    this.feet = { l: { p: null, on: false, w: sp0(), pitch: 0 }, r: { p: null, on: false, w: sp0(), pitch: 0 } };
+    this.grips = { l: { p: null, on: false, w: sp0(), ori: null }, r: { p: null, on: false, w: sp0(), ori: null } };
     this._handQ = { l: null, r: null };
     this._yawV = 0;
     this._acc = 0;
@@ -577,6 +601,18 @@ export class Human {
     this.upperLen = _v.distanceTo(_v2);
     this.bones.arm.l.hand.getWorldPosition(_v2);
     this.foreLen = _v.distanceTo(_v2);
+    // Lengtes en richtingen van de benen (voor voeten op een sport of ligger, zie pinFoot).
+    const leg = this.bones.leg.l;
+    leg.up.getWorldPosition(_v);
+    leg.fore.getWorldPosition(_v2);
+    this.thighLen = _v.distanceTo(_v2);
+    leg.foot.getWorldPosition(_v);
+    this.calfLen = _v.distanceTo(_v2);
+    for (const s of ['l', 'r']) {
+      const L = this.bones.leg[s];
+      L.upAxis = L.fore.position.clone().normalize();
+      L.foreAxis = L.foot.position.clone().normalize();
+    }
     // Richting van de bovenarm in de lokale ruimte van het bot (naar de onderarm).
     for (const s of ['l', 'r']) {
       const a = this.bones.arm[s];
@@ -720,6 +756,37 @@ export class Human {
     this.aim[side] = worldPoint ? worldPoint.clone() : null;
   }
 
+  // Voet ('l' of 'r') met de enkel op punt p in de wereld zetten (een sport, ligger of de vloer),
+  // of loslaten met null. Het scenario mag p daarna zelf verplaatsen (dezelfde Vector3): zo stapt
+  // de voet mee. feet[side].pitch: tenen omlaag (+) of omhoog (−), in radialen (begint op 0).
+  // instant: zonder overgang.
+  pinFoot(side, p, { instant = false } = {}) {
+    const f = this.feet[side];
+    if (p) f.p = p;
+    f.on = !!p;
+    f.pitch = 0;
+    if (instant) {
+      f.w.x = p ? 1 : 0;
+      f.w.v = 0;
+    }
+  }
+
+  // Hand ('l' of 'r') met de pols op punt p (vasthouden aan een staander, ligger of leuning), of
+  // loslaten met null. Net als bij pinFoot mag p meebewegen.
+  // ori: stand van de hand als [richting vingers, richting duimkant] in de assen van het lichaam
+  // (x = links, y = omhoog, z = vooruit); een nieuwe stand wordt zacht overgenomen.
+  grip(side, p, { instant = false, ori = null } = {}) {
+    const g = this.grips[side];
+    if (p) g.p = p;
+    g.on = !!p;
+    if (ori) g.ori = ori;
+    if (instant) {
+      g.w.x = p ? 1 : 0;
+      g.w.v = 0;
+      g.f = g.t = null;
+    }
+  }
+
   // Knikken / nee schudden: zacht in- en uitgezet, steeds net iets anders (amplitude, tempo).
   nod(amp = 1) {
     this._nod = { t: 0, dur: rnd(0.85, 1.1), amp: amp * rnd(0.85, 1.15), n: rnd(1.4, 1.6) };
@@ -751,6 +818,10 @@ export class Human {
     this._lookWs.x = this._lookWs.v = 0;
     this.lookW = 0;
     this._yawV = 0;
+    for (const s of ['l', 'r']) {
+      this.pinFoot(s, null, { instant: true });
+      this.grip(s, null, { instant: true });
+    }
   }
 
   // Lopende eigen handeling netjes afronden en een tijd geen nieuwe beginnen.
@@ -914,6 +985,7 @@ export class Human {
     else for (let i = 0; i < this._allBones.length; i++) this._animQ[i].copy(this._allBones[i].quaternion);
     this._rootMotion();
     this.root.updateMatrixWorld(true);
+    this._legs(dt); // voeten op een sport of ligger
 
     // Procedurele lagen bovenop de animatie.
     this._speechClock(dt);
@@ -1526,9 +1598,12 @@ export class Human {
 
   // Twee-botten-IK voor een arm: schouder → elleboog → pols naar `T`, elleboog richting `pole`.
   _ik(side, T, pole, w) {
-    const a = this.bones.arm[side];
-    const l1 = this.upperLen;
-    const l2 = this.foreLen;
+    this._ikChain(this.bones.arm[side], this.upperLen, this.foreLen, T, pole, w);
+  }
+
+  // Twee-botten-IK voor een ledemaat { up, fore, upAxis, foreAxis } met lengtes l1 en l2:
+  // het eind van `fore` naar `T`, het middelste gewricht (elleboog, knie) richting `pole`.
+  _ikChain(a, l1, l2, T, pole, w) {
     const S = a.up.getWorldPosition(_ikS);
     const D = _ikD.copy(T).sub(S);
     const d = THREE.MathUtils.clamp(D.length(), Math.abs(l1 - l2) + 0.03, (l1 + l2) * 0.995);
@@ -1543,6 +1618,29 @@ export class Human {
     const Tc = _ikS.addScaledVector(D, d);
     this._pointBone(a.fore, a.foreAxis, _ikT.copy(Tc).sub(_ikE).normalize(), w);
     a.fore.updateMatrixWorld(true);
+  }
+
+  // Voeten op hun punt (pinFoot): heup → knie → enkel met IK, de knie naar voren en iets naar
+  // buiten. De voet houdt de stand uit de animatie (plat), eventueel met de tenen omlaag (pitch).
+  _legs(dt) {
+    let axes = false;
+    for (const s of ['l', 'r']) {
+      const f = this.feet[s];
+      const w = THREE.MathUtils.clamp(spring(f.w, f.on ? 1 : 0, 7, 1, dt), 0, 1);
+      if (w < 0.002 || !f.p) continue;
+      if (!axes) {
+        this._bodyAxes();
+        axes = true;
+      }
+      const L = this.bones.leg[s];
+      L.foot.getWorldQuaternion(_qF);
+      _ikPole.copy(_bz).addScaledVector(_bx, s === 'l' ? 0.15 : -0.15);
+      this._ikChain(L, this.thighLen, this.calfLen, f.p, _ikPole, w);
+      if (f.pitch) _qF.premultiply(_q.setFromAxisAngle(_bx, f.pitch));
+      L.foot.parent.getWorldQuaternion(_q3);
+      L.foot.quaternion.slerp(_q3.invert().multiply(_qF), w);
+      L.foot.updateMatrixWorld(true);
+    }
   }
 
   _aimArms(dt) {
@@ -1691,6 +1789,33 @@ export class Human {
       else if (f.pending === 'release') this._releaseProp(f);
       f.pending = null;
       this._carryProp(f);
+    }
+
+    // Vasthouden (grip): hand met IK op zijn punt, ook als de arm net een gebaar maakte. Boven
+    // schouderhoogte gaat de schouder mee omhoog.
+    for (const s of ['l', 'r']) {
+      const g = this.grips[s];
+      const w = THREE.MathUtils.clamp(spring(g.w, g.on ? 1 : 0, 6, 1, dt), 0, 1);
+      if (w < 0.002 || !g.p) continue;
+      const k = s === 'l' ? 1 : -1;
+      this.bones.arm[s].up.getWorldPosition(_v);
+      const high = THREE.MathUtils.clamp((g.p.y - _v.y) / 0.45, 0, 1) * w * 0.1;
+      if (high > 1e-3) this._shoulders(s === 'l' ? high : 0, s === 'r' ? high : 0);
+      this._ik(s, g.p, _ikPole.copy(_bx).multiplyScalar(k * 0.7).addScaledVector(_by, -1).addScaledVector(_bz, -0.25), w);
+      const a = this.bones.arm[s];
+      if (g.ori && a.handAxis) {
+        const kOri = g.f ? 1 - Math.exp(-8 * dt) : 1;
+        g.f = (g.f || new THREE.Vector3()).lerp(_v.fromArray(g.ori[0]).normalize(), kOri).normalize();
+        g.t = (g.t || new THREE.Vector3()).lerp(_v.fromArray(g.ori[1]).normalize(), kOri).normalize();
+        this.root.getWorldQuaternion(_qRoot);
+        this._orientBone(a.hand, a.handAxis, a.handSide, _f.copy(g.f).applyQuaternion(_qRoot), _r.copy(g.t).applyQuaternion(_qRoot), w);
+      }
+      // Vingers om de staander of leuning: elk kootje een stuk krommer dan in rust (duim minder).
+      for (const [b, rest] of a.fingers || []) {
+        const thumb = /Finger0/.test(b.name);
+        _q.copy(rest).multiply(_q2.setFromAxisAngle(GRIP_AXIS, thumb ? 0.35 : 0.95));
+        b.quaternion.slerp(_q, w);
+      }
     }
 
     // Pols ijlt na (overlappende beweging): de stand van de hand volgt de onderarm met ~60 ms

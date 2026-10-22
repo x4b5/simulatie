@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildWorld, LAYOUT, softShadow } from './world.js';
+import { buildWorld, hallLights, LAYOUT, softShadow } from './world.js';
 import { Human } from './human.js';
 import { Forklift, FORK_TIP } from './forklift.js';
 import { UI, LINES, CHOICES, OUTCOMES } from './i18n.js';
@@ -16,24 +16,7 @@ import {
 // ------------------------------------------------------------------
 // Licht
 // ------------------------------------------------------------------
-scene.background = new THREE.Color(0x2b3036);
-scene.fog = new THREE.Fog(0x2b3036, 24, 62);
-const hemi = new THREE.HemisphereLight(0xe6edf5, 0x4a463f, 0.4);
-scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xf4f6ff, 1.8);
-sun.position.set(7, 19, 6);
-sun.target.position.set(1, 0, -7);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -21;
-sun.shadow.camera.right = 21;
-sun.shadow.camera.top = 21;
-sun.shadow.camera.bottom = -21;
-sun.shadow.camera.near = 2;
-sun.shadow.camera.far = 50;
-sun.shadow.bias = -0.0004;
-sun.shadow.normalBias = 0.03;
-scene.add(sun, sun.target);
+hallLights(scene);
 
 // ------------------------------------------------------------------
 // Plattegrond

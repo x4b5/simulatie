@@ -562,6 +562,30 @@ export function buildWorld(scene, renderer) {
   return world;
 }
 
+// Licht van de hal: achtergrond en mist, hemellicht en één "zon" met schaduw die alle lampen
+// samen voorstelt. pos/target: waar het licht vandaan komt en waar de schaduwen vallen.
+export function hallLights(scene, { pos = new THREE.Vector3(7, 19, 6), target = new THREE.Vector3(1, 0, -7), size = 21 } = {}) {
+  scene.background = new THREE.Color(0x2b3036);
+  scene.fog = new THREE.Fog(0x2b3036, 24, 62);
+  const hemi = new THREE.HemisphereLight(0xe6edf5, 0x4a463f, 0.4);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xf4f6ff, 1.8);
+  sun.position.copy(pos);
+  sun.target.position.copy(target);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -size;
+  sun.shadow.camera.right = size;
+  sun.shadow.camera.top = size;
+  sun.shadow.camera.bottom = -size;
+  sun.shadow.camera.near = 2;
+  sun.shadow.camera.far = 50;
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.03;
+  scene.add(sun, sun.target);
+  return { hemi, sun };
+}
+
 // Zachte schaduwvlek (contactschaduw/omgevingsocclusie) als vloerdecal.
 export function softShadow(w, d, opacity = 0.55, round = true) {
   const tex = canvas(128, 128, (g, cw, ch) => {

@@ -3,18 +3,11 @@
 // De grap gaat over de uitspraak van "een ui in mijn huis"; die woorden blijven in elke taal
 // Nederlands, anders is de grap niet te volgen.
 
-import { UI as BASE_UI, OUTCOMES as BASE_OUTCOMES } from './i18n.js';
+import { UI as BASE_UI, OUTCOMES as BASE_OUTCOMES, EXERCISES } from './i18n.js';
 
 export const UI = {
   ...BASE_UI,
-  title: {
-    nl: 'Grap in de kantine',
-    en: 'A joke in the canteen',
-    ar: 'مزحة في المقصف',
-    pl: 'Żart w stołówce',
-    tr: 'Kantinde bir şaka',
-    uk: 'Жарт у їдальні',
-  },
+  title: EXERCISES.kantine,
   l1: {
     nl: 'Het is pauze. Je zit in de kantine.',
     en: 'It is break time. You are sitting in the canteen.',
@@ -38,14 +31,6 @@ export const UI = {
     pl: 'Wszyscy patrzą na ciebie. Co mówisz?',
     tr: 'Herkes sana bakıyor. Ne dersin?',
     uk: 'Усі дивляться на тебе. Що ти скажеш?',
-  },
-  other: {
-    nl: 'Andere oefening: Bijna geraakt',
-    en: 'Other exercise: Almost hit',
-    ar: 'تمرين آخر: كاد أن يُصدم',
-    pl: 'Inne ćwiczenie: O mały włos',
-    tr: 'Diğer alıştırma: Kıl payı',
-    uk: 'Інша вправа: Ледь не збили',
   },
   dennis: { nl: 'Dennis, collega', en: 'Dennis, colleague', ar: 'دينيس، زميل', pl: 'Dennis, kolega', tr: 'Dennis, iş arkadaşı', uk: 'Денніс, колега' },
   tomasz: { nl: 'Tomasz, collega', en: 'Tomasz, colleague', ar: 'توماش، زميل', pl: 'Tomasz, kolega', tr: 'Tomasz, iş arkadaşı', uk: 'Томаш, колега' },

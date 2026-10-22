@@ -204,7 +204,7 @@ const onFloor = (x, z) => new THREE.Vector3(x, ANK, z);
 // De vingers krommen vooral bij de knokkel: om een staander van 7 cm diep krullen ze niet terug
 // het staal in. SKIN: de muis van de hand is dikker dan het midden van de handpalm.
 const SKIN = 0.012;
-const POLE_POST = { l: [0.1, -0.8, -1], r: [0.55, -0.8, -1] };
+const POLE_POST = { l: [0.1, -0.45, -1], r: [0.4, -0.45, -1] };
 function postHold(side, y) {
   return contact(null, V3(POST_X - 0.005, y, RACK - SKIN), AX.x, AX.z, {
     curl: side === 'l' ? [1.4, -0.1, 0.05] : [1.35, -0.1, 0.05],
@@ -215,7 +215,7 @@ function postHold(side, y) {
 // Hand over de voorrand van de derde ligger gehaakt: handpalm tegen de voorkant, vingers over de
 // rand op het rooster. Pols en onderarm hangen vóór de ligger, de elleboog naar achteren.
 // Rechts van de doos en de doos eronder (x > 0,08), anders zitten de vingers in het karton.
-const beamHold = (x, lv) => contact(null, V3(x, lv - 0.03, RACK - SKIN), AX.y, AX.z, { curl: [1.35, -0.1, 0.05], thumb: 0.2, pole: [0.6, -0.8, -0.9] });
+const beamHold = (x, lv) => contact(null, V3(x, lv - 0.03, RACK - SKIN), AX.y, AX.z, { curl: [1.35, -0.1, 0.05], thumb: 0.2, pole: [0.35, -0.45, -1] });
 const BEAM_X = HX + 0.06;
 
 // ------------------------------------------------------------------
@@ -455,8 +455,8 @@ async function climbDown(id) {
   h.settle(30);
   h.lookTarget = V(HX - 0.1, RACK - 0.05, LV[0]);
   h.torsoFollow = 0.15;
-  // Recht voor de stelling gaan staan (iets naar de staander toe), rechterhand plat op de derde
-  // ligger, naast de doos.
+  // Recht voor de stelling gaan staan (iets naar de staander toe), rechterhand over de voorrand
+  // van de derde ligger, naast de doos.
   await Promise.all([turnHenk(0.25, 0.8), holds.set('r', beamHold(BEAM_X, LV[2]), 0.9, { out: 0.06, over: 0.4 })]);
   guard(id);
   // 1. Rechtervoet naar de eerste ligger.
@@ -464,9 +464,9 @@ async function climbDown(id) {
   await stepTo(id, 'r', onBeam(HX - 0.1, LV[0]), { dur: 1.35, lift: 0.04, out: 0.16, back: 0.06, bend: 0.34, rest: beam1, land: () => clink() });
   // 2. Handen omlaag: eerst links lager aan de staander, dan rechts van de ligger naar de
   // staander, onder de linker.
-  await holds.set('l', postHold('l', 1.66), 0.6, { out: 0.1 });
+  await holds.set('l', postHold('l', 1.56), 0.6, { out: 0.1 });
   guard(id);
-  await holds.set('r', postHold('r', 1.52), 0.7, { out: 0.1 });
+  await holds.set('r', postHold('r', 1.34), 0.7, { out: 0.1 });
   guard(id);
   // 3. Linkervoet erbij op de eerste ligger.
   h.lookTarget = V(HX + 0.1, RACK - 0.05, LV[0]);
@@ -926,14 +926,14 @@ async function branchA(id) {
 }
 
 // Ellebogen bij het draaien met de doos: de linker omlaag langs het lichaam, de rechter (die kant
-// draait naar de stelling) omlaag en naar de gang, in wereldrichting, elk beeld omgerekend naar de
-// assen van het lichaam. De pole van een greep wordt elk beeld gelezen, dus hij mag veranderen.
+// draait naar de stelling) omlaag, opzij en naar achteren (weg van de doos) en iets de gang in;
+// het deel in wereldrichting wordt elk beeld omgerekend naar de assen van het lichaam. De pole van een greep wordt elk beeld gelezen, dus hij mag veranderen.
 const _pw = new THREE.Vector3();
 function tuckElbows(dur) {
   const tucked = { l: () => [0.1, -1, -0.6], r: () => {
     const y = henk.root.rotation.y;
-    _pw.set(0, -0.6, -1); // wereld: omlaag en de gang in
-    return [-(_pw.x * Math.cos(y) - _pw.z * Math.sin(y)), _pw.y, _pw.x * Math.sin(y) + _pw.z * Math.cos(y)];
+    _pw.set(0, -0.6, -0.35); // wereld: omlaag en iets de gang in
+    return [0.25 - (_pw.x * Math.cos(y) - _pw.z * Math.sin(y)), _pw.y, _pw.x * Math.sin(y) + _pw.z * Math.cos(y) - 1];
   } };
   for (const s of ['l', 'r']) {
     const pl = holds.s[s].c?.pole;

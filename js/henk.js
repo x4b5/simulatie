@@ -31,6 +31,11 @@ const LV = AISLE.levels; // bovenkant van de liggers
 const POST_X = HENK_BAY.x1; // staander links van Henk
 const HX = 0.1; // midden tussen Henks voeten (x) als hij in de stelling staat
 const ANK = 0.1; // enkel boven de zool
+// Henks wortel (z) in de stelling: bij de doos staat hij er dicht tegenaan, als hij omkijkt en
+// praat een paar centimeter verder naar de gang (zijn voeten blijven op de ligger): dan blijven
+// zijn schouders en armen vóór de staander en de liggers, ook als zijn romp meedraait.
+const REACH_Z = AISLE.faceN - 0.14;
+const TALK_Z = AISLE.faceN - 0.19;
 const P = {
   start: V(-10.0, 13.3),
   walk1: V(-6.2, 13.3),
@@ -189,18 +194,28 @@ const AX = { x: V3(1, 0, 0), y: V3(0, 1, 0), z: V3(0, 0, 1), nx: V3(-1, 0, 0), n
 const onBeam = (x, lv) => new THREE.Vector3(x, lv + ANK, RACK - 0.06); // bal van de voet op de ligger
 const onFloor = (x, z) => new THREE.Vector3(x, ANK, z);
 
-// Grepen (zie js/hands.js): handpalm op het staal, vingers eromheen.
-// Staander links van Henk (8 × 7 cm). Linkerhand: handpalm op de voorkant, vingers om de
-// buitenkant. Rechterhand: handpalm op de binnenkant (naar Henk), vingers om de achterkant.
+// Grepen (zie js/hands.js): handpalm op het staal, vingers eromheen. Altijd aan de gangkant: de
+// handpalm op de voorkant van de staander of ligger, de vingers om de rand, de elleboog naar
+// achteren de gang in (pole). Zo blijven boven- en onderarm vóór de stelling: vanaf de speler en
+// van opzij helemaal te zien, nooit door het staal, het rooster of de dozen.
+// Staander links van Henk (8 × 7 cm): beide handen met de handpalm op de voorkant en de vingers
+// om de buitenkant (de rechterhand reikt voor het lichaam langs, de duim omlaag).
 // Hoogtes altijd tussen de liggers (0,84–0,95 en 2,04–2,15 m), anders zitten de vingers erin.
+// De vingers krommen vooral bij de knokkel: om een staander van 7 cm diep krullen ze niet terug
+// het staal in. SKIN: de muis van de hand is dikker dan het midden van de handpalm.
+const SKIN = 0.012;
+const POLE_POST = { l: [0.1, -0.8, -1], r: [0.55, -0.8, -1] };
 function postHold(side, y) {
-  return side === 'l'
-    ? contact(null, V3(POST_X - 0.005, y, RACK), AX.x, AX.z, { curl: [1.45, 0.5, 0.3], thumb: 0.55 })
-    : contact(null, V3(POST_X - 0.04, y, RACK + 0.028), AX.z, AX.x, { curl: [1.4, 0.55, 0.3], thumb: 0.5 });
+  return contact(null, V3(POST_X - 0.005, y, RACK - SKIN), AX.x, AX.z, {
+    curl: side === 'l' ? [1.4, -0.1, 0.05] : [1.35, -0.1, 0.05],
+    thumb: 0.2,
+    pole: POLE_POST[side],
+  });
 }
-// Hand plat op de bovenkant van de ligger, vingers op het rooster, duim onder de voorrand.
+// Hand over de voorrand van de derde ligger gehaakt: handpalm tegen de voorkant, vingers over de
+// rand op het rooster. Pols en onderarm hangen vóór de ligger, de elleboog naar achteren.
 // Rechts van de doos en de doos eronder (x > 0,08), anders zitten de vingers in het karton.
-const beamHold = (x, lv) => contact(null, V3(x, lv, RACK + 0.02), AX.z, AX.ny, { curl: [0.22, 0.14, 0.08], thumb: 0.9 });
+const beamHold = (x, lv) => contact(null, V3(x, lv - 0.03, RACK - SKIN), AX.y, AX.z, { curl: [1.35, -0.1, 0.05], thumb: 0.2, pole: [0.6, -0.8, -0.9] });
 const BEAM_X = HX + 0.06;
 
 // ------------------------------------------------------------------
@@ -210,15 +225,17 @@ const BEAM_X = HX + 0.06;
 // de handen zitten aan de doos) of valt (B: star lichaam dat botst met het staal, de mensen en de
 // vloer, zie js/boxphys.js).
 const BOX_HALF = [0.21, 0.15, 0.23];
-// Rechterhand haakt de bovenrand: handpalm tegen de voorkant, vingers over de rand.
-const tugHold = () => contact(aisle.box, V3(0.11, BOX_HALF[1] - 0.035, -BOX_HALF[2]), AX.y, AX.z, { curl: [1.5, 0.3, 0.2], thumb: 0.3 });
-// Dragen: de handpalmen laag tegen de zijkanten, vingers naar voren langs het karton, ellebogen
-// omlaag langs het lichaam.
+// Rechterhand haakt de bovenrand: handpalm tegen de voorkant, vingers over de rand. De elleboog
+// opzij en naar achteren: de onderarm loopt schuin omhoog over de voorrand van de doos eronder.
+const tugHold = () => contact(aisle.box, V3(0.11, BOX_HALF[1] - 0.03, -BOX_HALF[2] - SKIN), AX.y, AX.z, { curl: [1.35, -0.1, 0.05], thumb: 0.15, pole: [0.9, -0.25, -0.8] });
+// Dragen: de handpalmen halverwege tegen de zijkanten, vingers naar voren langs het karton,
+// ellebogen opzij en naar achteren: zo blijven de onderarmen boven de doos eronder als hij de
+// doos pakt, en vóór de stelling als hij ermee omdraait.
 const carryHold = (side) =>
-  contact(aisle.box, V3((side === 'l' ? 1 : -1) * BOX_HALF[0], -BOX_HALF[1] + 0.075, -0.1), V3(0, -0.12, 1), side === 'l' ? AX.nx : AX.x, {
-    curl: [0.16, 0.12, 0.06],
-    thumb: 0.2,
-    pole: [0.4, -1, -0.45],
+  contact(aisle.box, V3((side === 'l' ? 1 : -1) * (BOX_HALF[0] + 0.008), 0.03, -0.12), V3(0, -0.12, 1), side === 'l' ? AX.nx : AX.x, {
+    curl: [0.12, 0.06, 0.03],
+    thumb: 0.1,
+    pole: [0.7, -0.5, -0.6],
   });
 
 let body; // BoxBody (vallen en botsen)
@@ -339,7 +356,7 @@ function updateBox(dt) {
   // Mensen als capsules: Henk (zijn rechterarm laat net de doos los: die telt pas na een tel mee),
   // de speler, en zijn armen als die in beeld zijn.
   bodyCapsules(henk, henkCaps);
-  if (fall.t < 0.45) for (const c of henkCaps) if (c.arm === 'r') c.r = 0;
+  if (fall.t < 0.15) for (const c of henkCaps) if (c.arm === 'r') c.r = 0;
   playerCap.a.set(rig.position.x, 0.25, rig.position.z);
   playerCap.b.set(rig.position.x, 1.45, rig.position.z);
   const people = [...henkCaps, playerCap];
@@ -388,7 +405,7 @@ function placeOnBeam(yaw) {
   henk.root.rotation.set(0, yaw, 0);
   climb.on = true;
   climb.swing = null;
-  climb.goal.set(HX, LV[1] - 0.025, RACK - 0.14);
+  climb.goal.set(HX, LV[1] - 0.025, REACH_Z);
   henk.root.position.copy(climb.goal);
   climb.foot.l.copy(onBeam(HX + 0.13, LV[1]));
   climb.foot.r.copy(onBeam(HX - 0.1, LV[1]));
@@ -440,14 +457,14 @@ async function climbDown(id) {
   h.torsoFollow = 0.15;
   // Recht voor de stelling gaan staan (iets naar de staander toe), rechterhand plat op de derde
   // ligger, naast de doos.
-  await Promise.all([turnHenk(0.25, 0.8), holds.set('r', beamHold(BEAM_X, LV[2]), 0.9, { out: 0.1 })]);
+  await Promise.all([turnHenk(0.25, 0.8), holds.set('r', beamHold(BEAM_X, LV[2]), 0.9, { out: 0.06, over: 0.4 })]);
   guard(id);
   // 1. Rechtervoet naar de eerste ligger.
   const beam1 = V3(HX, LV[0] - 0.03, RACK - 0.2);
   await stepTo(id, 'r', onBeam(HX - 0.1, LV[0]), { dur: 1.35, lift: 0.04, out: 0.16, back: 0.06, bend: 0.34, rest: beam1, land: () => clink() });
   // 2. Handen omlaag: eerst links lager aan de staander, dan rechts van de ligger naar de
   // staander, onder de linker.
-  await holds.set('l', postHold('l', 1.66), 0.6, { out: 0.06 });
+  await holds.set('l', postHold('l', 1.66), 0.6, { out: 0.1 });
   guard(id);
   await holds.set('r', postHold('r', 1.52), 0.7, { out: 0.1 });
   guard(id);
@@ -654,6 +671,8 @@ function resetScene(state) {
   } else if (state === 'choice') {
     rig.position.copy(P.stop);
     holds.set('r', beamHold(BEAM_X, LV[2]));
+    climb.goal.z = TALK_Z;
+    henk.root.position.z = TALK_Z;
     henk.lookTarget = playerHead;
     onChoice();
     snapLook();
@@ -713,7 +732,8 @@ async function runIntro(id) {
   henk.lookTarget = playerHead;
   henk.surprise = 0.2;
   henk.torsoFollow = 0.55;
-  holds.set('r', beamHold(BEAM_X, LV[2]), 0.7, { out: 0.06 });
+  holds.set('r', beamHold(BEAM_X, LV[2]), 0.7, { out: 0.04, over: 0.4 });
+  glide(climb.goal, V3(HX, climb.goal.y, TALK_Z), 0.9);
   await wait(0.9);
   guard(id);
   await say(id, 'h1', [
@@ -730,7 +750,7 @@ async function tugLoop(id) {
   // Reiken en trekken: hand naar de doos, kort trekken, even uitrusten, opnieuw.
   tugging = true;
   for (let i = 0; tugging && id === runId; i++) {
-    await holds.set('r', tugHold(), 0.55, { out: 0.05 });
+    await holds.set('r', tugHold(), 0.55, { out: 0.03, over: 0.4 });
     guard(id);
     henk.inhale(0.4);
     await wait(0.3);
@@ -745,7 +765,7 @@ async function tugLoop(id) {
     henk.lean = 0;
     if (!tugging) break;
     // Even uitrusten: de hand plat op de ligger.
-    await holds.set('r', beamHold(BEAM_X, LV[2]), 0.55, { out: 0.04 });
+    await holds.set('r', beamHold(BEAM_X, LV[2]), 0.55, { out: 0.03, over: 0.4 });
     guard(id);
     await wait(0.7 + Math.random() * 0.5);
     guard(id);
@@ -886,18 +906,57 @@ async function branchA(id) {
   henk.root.updateMatrixWorld();
   await carryBox(henk.root.worldToLocal(aisle.box.position.clone()).add(V3(0, 0.025, -0.05)), 0.6);
   guard(id);
+  // Met de doos twee kleine stapjes naar achteren op het platform (de gang in): de doos, zijn
+  // handen en ellebogen komen vrij van de doos eronder en de stelling, pas dan draait hij.
+  await stepBackOnPlatform(id, 0.13);
   // Optillen en met de doos naar de speler draaien (twee kleine stapjes op het platform; de doos
   // is zwaar, dus rustig). De doos zakt pas als hij vrij is van de doos eronder, tot op buikhoogte
   // tegen het lichaam; Henk leunt een beetje achterover.
   henk.lookTarget = playerHead;
   henk.torsoFollow = 0.4;
   later(id, 0.5, () => (henk.lean = 0.07));
+  // Ellebogen onder het draaien langs het lichaam (anders draait de rechterelleboog de stelling in).
+  tuckElbows(2.0);
   await Promise.all([carryBox(V3(0, 1.2, 0.36), 2.0, 0.65), pivotOnPlatform(id, 1.25, 1.8)]);
   guard(id);
   henk.mood = { smile: 0.3 };
   later(id, 0.3, () => henk.nod(0.8));
   await wait(2.6);
   guard(id);
+}
+
+// Ellebogen bij het draaien met de doos: de linker omlaag langs het lichaam, de rechter (die kant
+// draait naar de stelling) omlaag en naar de gang, in wereldrichting, elk beeld omgerekend naar de
+// assen van het lichaam. De pole van een greep wordt elk beeld gelezen, dus hij mag veranderen.
+const _pw = new THREE.Vector3();
+function tuckElbows(dur) {
+  const tucked = { l: () => [0.1, -1, -0.6], r: () => {
+    const y = henk.root.rotation.y;
+    _pw.set(0, -0.6, -1); // wereld: omlaag en de gang in
+    return [-(_pw.x * Math.cos(y) - _pw.z * Math.sin(y)), _pw.y, _pw.x * Math.sin(y) + _pw.z * Math.cos(y)];
+  } };
+  for (const s of ['l', 'r']) {
+    const pl = holds.s[s].c?.pole;
+    if (!pl) continue;
+    const a = pl.slice();
+    tween(dur, (k) => {
+      const b = tucked[s]();
+      const e = ease(Math.min(1, k * 2.5));
+      for (let i = 0; i < 3; i++) pl[i] = a[i] + (b[i] - a[i]) * e;
+    });
+  }
+}
+
+// Op het platform een stukje naar achteren (z), eerst links dan rechts; de wortel gaat mee.
+async function stepBackOnPlatform(id, d) {
+  const g = climb.goal;
+  glide(g, V3(g.x, g.y, g.z - d), 0.8);
+  for (const s of ['l', 'r']) {
+    const f = climb.foot[s];
+    await glide(f, V3(f.x, f.y, f.z - d), 0.4, { lift: 0.04 });
+    guard(id);
+    clink(0.08);
+  }
 }
 
 // Op het platform een kwartslag draaien met twee kleine stapjes (voeten blijven op het platform).
@@ -932,7 +991,7 @@ async function branchB(id) {
   henk.lookTarget = boxLook;
   henk.torsoFollow = 0.2;
   henk.mood = { worry: 0.2 };
-  await holds.set('r', tugHold(), 0.7, { out: 0.05 });
+  await holds.set('r', tugHold(), 0.7, { out: 0.03, over: 0.4 });
   guard(id);
   // Marco komt intussen de hoofdgang op rijden.
   fl.on = true;
@@ -962,7 +1021,7 @@ async function branchB(id) {
   guard(id);
   // Voet terug op de ligger, overeind komen, nahijgen.
   henk.lookTarget = V(HX - 0.1, RACK - 0.05, LV[1]);
-  glide(climb.goal, V(HX, RACK - 0.14, LV[1] - 0.025), 0.9);
+  glide(climb.goal, V(HX, TALK_Z, LV[1] - 0.025), 0.9);
   turnHenk(-0.2, 0.9);
   henk.lean = 0;
   tween(0.8, (k) => (henk.root.rotation.z = 0.15 * (1 - ease(k))));
@@ -1029,7 +1088,7 @@ function slip(id) {
   henk.lean = 0.1;
   tween(0.35, (k) => (henk.root.rotation.z = 0.15 * ease(k)));
   // Beide handen om de staander (rechts onder links, allebei op schouderhoogte: binnen bereik).
-  holds.set('r', postHold('r', 1.94), 0.28);
+  holds.set('r', postHold('r', 1.94), 0.28, { over: 0.5 });
   holds.set('l', postHold('l', 2.27), 0.2);
   // De speler trekt zijn handen terug.
   arms.move('l', guardHold('l'), 0.22);
@@ -1078,7 +1137,7 @@ async function branchC(id) {
     [2.55, () => henk.jab('r', henk.root.localToWorld(new THREE.Vector3(-0.7, 1.6, 0.25)), 0.75, 0.6)],
   ]);
   henk.setHands('angry');
-  holds.set('r', beamHold(BEAM_X, LV[2]), 0.6, { out: 0.06 });
+  holds.set('r', beamHold(BEAM_X, LV[2]), 0.6, { out: 0.04, over: 0.4 });
   // Sandra komt eraan. De speler stapt achteruit het midden van de gang in, naar haar toe.
   sandra.lookTarget = henkHead;
   lookAtFn(faceOf(sandra, 0.1), 1.8);

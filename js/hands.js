@@ -52,13 +52,16 @@ export class Holds {
     this.h = h;
     this.s = {};
     for (const side of ['l', 'r']) {
-      this.s[side] = { c: null, k: 1, tok: 0, from: new THREE.Vector3(), f0: new THREE.Vector3(), t0: new THREE.Vector3(), p: new THREE.Vector3(), f: new THREE.Vector3(0, 0, 1), t: new THREE.Vector3(0, 1, 0), lift: 0, out: 0 };
+      this.s[side] = { c: null, k: 1, tok: 0, over: 0, from: new THREE.Vector3(), f0: new THREE.Vector3(), t0: new THREE.Vector3(), p: new THREE.Vector3(), f: new THREE.Vector3(0, 0, 1), t: new THREE.Vector3(0, 1, 0), lift: 0, out: 0 };
     }
   }
 
   // Hand naar contact c in dur seconden. lift: boogje omhoog, out: boogje naar achteren (weg van
-  // de stelling of het voorwerp). c = null: loslaten (de arm gaat terug naar de animatie).
-  set(side, c, dur = 0, { lift = 0, out = 0 } = {}) {
+  // de stelling of het voorwerp). over (0…1): over een rand heen: omhoog gaat de hand eerst
+  // omhoog en dan pas naar voren (over de rand), omlaag eerst naar achteren en dan pas omlaag,
+  // zodat hij nooit door de rand of het staal eronder snijdt. c = null: loslaten (de arm gaat
+  // terug naar de animatie).
+  set(side, c, dur = 0, { lift = 0, out = 0, over = 0 } = {}) {
     const st = this.s[side];
     const h = this.h;
     const tok = ++st.tok;
@@ -83,6 +86,7 @@ export class Holds {
     st.c = c;
     st.lift = lift;
     st.out = out;
+    st.over = over;
     st.k = dur > 0 ? 0 : 1;
     this._solve(side);
     h.grip(side, st.p, {
@@ -111,6 +115,16 @@ export class Holds {
     const e = ease(st.k);
     const a = Math.sin(Math.PI * st.k);
     st.p.lerpVectors(st.from, _w, e);
+    if (st.over) {
+      // Hoogte en vlak elk in hun eigen tempo: wat de hand van de rand af houdt gaat eerst.
+      const o = st.over;
+      const first = ease(Math.min(1, st.k / (1 - o)));
+      const then = ease(Math.max(0, (st.k - o) / (1 - o)));
+      const up = _w.y > st.from.y;
+      const kh = up ? then : first;
+      st.p.lerpVectors(st.from, _w, kh);
+      st.p.y = st.from.y + (_w.y - st.from.y) * (up ? first : then);
+    }
     st.p.y += a * st.lift;
     if (st.out) {
       // Naar achteren t.o.v. het lichaam.

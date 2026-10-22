@@ -404,7 +404,7 @@ export class AudioEngine {
     this.clank(dest, dur - 0.05, 160);
   }
 
-  clank(dest, at = 0, freq = 240) {
+  clank(dest, at = 0, freq = 240, gain = 1.6) {
     const ctx = this.ctx;
     const t = ctx.currentTime + at;
     const n = this._noiseSrc(false);
@@ -414,7 +414,7 @@ export class AudioEngine {
     f.Q.value = 18;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(1.6, t + 0.004);
+    g.gain.linearRampToValueAtTime(gain, t + 0.004);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
     n.connect(f).connect(g).connect(dest);
     n.start(t);
@@ -665,5 +665,80 @@ export class AudioEngine {
     hiss.connect(hp).connect(hg).connect(dest);
     hiss.start(t + 2.6, 0.5);
     hiss.stop(t + 5.3);
+  }
+
+  // ---------- Stelling (Hoog en droog) ----------
+
+  // Metalen ligger die trilt en natrilt (voet die wegglijdt, ligger die verschuift): een paar
+  // boventonen met verschillende uitsterftijd, plus de klap zelf.
+  rackRing(dest, gain = 0.5) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    for (const [f, d, a] of [[183, 1.1, 1], [467, 0.7, 0.6], [1121, 0.35, 0.35], [2290, 0.18, 0.2]]) {
+      const o = this._osc('sine', f * (0.98 + Math.random() * 0.04));
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(gain * a * 0.25, t + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+      o.connect(g).connect(dest);
+      o.start(t);
+      o.stop(t + d + 0.05);
+    }
+    this.clank(dest, 0, 320, gain * 1.4);
+  }
+
+  // Doos die op de betonvloer valt: doffe dreun en het klappen van karton.
+  boxDrop(dest, gain = 0.8) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const o = this._osc('sine', 95);
+    o.frequency.setValueAtTime(110, t);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.18);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0, t);
+    og.gain.linearRampToValueAtTime(gain, t + 0.006);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    o.connect(og).connect(dest);
+    o.start(t);
+    o.stop(t + 0.35);
+    const n = this._noiseSrc(false);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 900;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0, t);
+    ng.gain.linearRampToValueAtTime(gain * 0.9, t + 0.004);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    n.connect(lp).connect(ng).connect(dest);
+    n.start(t, Math.random() * 2);
+    n.stop(t + 0.2);
+  }
+
+  // Zwenkwielen van de rolsteiger over het beton; set(snelheid in m/s).
+  castors(dest) {
+    const ctx = this.ctx;
+    const n = this._noiseSrc();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 420;
+    bp.Q.value = 1.2;
+    const rattle = this._osc('square', 23);
+    const rg = ctx.createGain();
+    rg.gain.value = 0.4;
+    const am = ctx.createGain();
+    am.gain.value = 0.6;
+    rattle.connect(rg).connect(am.gain);
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    n.connect(bp).connect(am).connect(g).connect(dest);
+    n.start(0, Math.random() * 2);
+    rattle.start();
+    return {
+      set(speed) {
+        const v = Math.min(1, Math.abs(speed) / 1.2);
+        g.gain.setTargetAtTime(v * 0.16, ctx.currentTime, 0.06);
+        rattle.frequency.setTargetAtTime(12 + v * 26, ctx.currentTime, 0.1);
+      },
+    };
   }
 }

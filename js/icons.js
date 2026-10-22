@@ -45,9 +45,20 @@ export const ICONS = {
   group: svg('<circle cx="24" cy="15" r="6"/><path d="M13 40a11 11 0 0 1 22 0"/><circle cx="9" cy="21" r="4.5"/><path d="M2 40a8 8 0 0 1 9-8"/><circle cx="39" cy="21" r="4.5"/><path d="M46 40a8 8 0 0 0-9-8"/>'),
   // Opgestoken hand: stop, grens aangeven
   hand: svg('<path d="M15 26V12a3 3 0 0 1 6 0v11V8a3 3 0 0 1 6 0v15V10a3 3 0 0 1 6 0v15-9a3 3 0 0 1 6 0v14c0 9-6 15-14 15h-1c-5 0-8-2-11-6l-6-8a3 3 0 0 1 5-4z"/>'),
+  // Stelling met dozen
+  rack: svg('<path d="M8 4v40M40 4v40M8 18h32M8 32h32"/><rect x="12" y="8" width="11" height="10"/><rect x="26" y="23" width="10" height="9"/><rect x="13" y="35" width="9" height="9"/>'),
+  // Persoon op een ligger van een stelling (twee staanders, twee liggers): één hand schuin
+  // naar de staander, de andere reikt omhoog naar een doos bovenin. De bovenste ligger loopt
+  // achter hem langs (onderbroken).
+  climb: svg('<path d="M5 3v41M43 3v41M5 17h5M23 17h20M5 31h38M2 44h44"/><rect x="30" y="7" width="10" height="10"/><circle cx="16" cy="6.5" r="3.5"/><path d="M16 11v10M16 21l-3.5 10M16 21l4 10M16 14l-10 7M16 13.5l7-1.5 6-4"/>'),
+  // Twee handen die een doos aan de zijkanten vastpakken (duim boven, vingers over de doos)
+  boxHands: svg('<rect x="13" y="6" width="22" height="22" rx="1"/><path d="M24 6v6"/><path d="M3 44l5-9V24a3 3 0 0 1 3-3h6M8 26h9M8 31h9"/><path d="M45 44l-5-9V24a3 3 0 0 0-3-3h-6M40 26h-9M40 31h-9"/>'),
+  // Rolsteiger: treden, platform, leuning en wieltjes
+  ladder: svg('<path d="M8 42L26 13h13v29M14 33h8M19 24h8"/><path d="M4 29L22 4h18v9"/><circle cx="9" cy="44" r="2"/><circle cx="38" cy="44" r="2"/>'),
 };
 
 // Pictogram per antwoord en per sfeer.
 export const CHOICE_ICON = { A: 'sorry', B: 'hurry', C: 'shout' };
 export const CANTEEN_CHOICE_ICON = { A: 'hand', B: 'laugh', C: 'shout' };
+export const HENK_CHOICE_ICON = { A: 'ladder', B: 'boxHands', C: 'shout' };
 export const MOOD_ICON = { calm: 'faceCalm', tense: 'faceTense', escalated: 'faceAngry' };

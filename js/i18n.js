@@ -10,6 +10,13 @@ export const LANGS = [
   { code: 'uk', label: 'Українська', dir: 'ltr' },
 ];
 
+// Namen van de drie oefeningen (titel op het startscherm en in de links naar elkaar).
+export const EXERCISES = {
+  bijna: { nl: 'Bijna geraakt', en: 'Almost hit', ar: 'كاد أن يُصدم', pl: 'O mały włos', tr: 'Kıl payı', uk: 'Ледь не збили' },
+  kantine: { nl: 'Grap in de kantine', en: 'A joke in the canteen', ar: 'مزحة في المقصف', pl: 'Żart w stołówce', tr: 'Kantinde bir şaka', uk: 'Жарт у їдальні' },
+  henk: { nl: 'Hoog en droog', en: 'Up high', ar: 'في الأعلى', pl: 'Wysoko na regale', tr: 'Yüksekte', uk: 'Високо на стелажі' },
+};
+
 export const UI = {
   eyebrow: {
     nl: 'Oefening · Werknemersvaardigheden',
@@ -19,14 +26,7 @@ export const UI = {
     tr: 'Alıştırma · İş becerileri',
     uk: 'Вправа · Навички працівника',
   },
-  title: {
-    nl: 'Bijna geraakt',
-    en: 'Almost hit',
-    ar: 'كاد أن يُصدم',
-    pl: 'O mały włos',
-    tr: 'Kıl payı',
-    uk: 'Ледь не збили',
-  },
+  title: EXERCISES.bijna,
   setting: {
     nl: 'Je werkt als orderpicker in een distributiecentrum. Je hebt haast: de vrachtwagen bij dock 3 vertrekt bijna. Je kijkt op je scanner en neemt een kortere weg…',
     en: 'You work as an order picker in a distribution centre. You are in a hurry: the truck at dock 3 is about to leave. You look at your scanner and take a shortcut…',
@@ -131,14 +131,11 @@ export const UI = {
     tr: 'Bir iş arkadaşı sinirlenir. Ne dersin?',
     uk: 'Колега злиться. Що ти скажеш?',
   },
-  other: {
-    nl: 'Andere oefening: Grap in de kantine',
-    en: 'Other exercise: A joke in the canteen',
-    ar: 'تمرين آخر: مزحة في المقصف',
-    pl: 'Inne ćwiczenie: Żart w stołówce',
-    tr: 'Diğer alıştırma: Kantinde bir şaka',
-    uk: 'Інша вправа: Жарт у їдальні',
-  },
+  // Links naar de andere oefeningen op het startscherm.
+  others: { nl: 'Andere oefeningen', en: 'Other exercises', ar: 'تمارين أخرى', pl: 'Inne ćwiczenia', tr: 'Diğer alıştırmalar', uk: 'Інші вправи' },
+  exBijna: EXERCISES.bijna,
+  exKantine: EXERCISES.kantine,
+  exHenk: EXERCISES.henk,
   noteShort: { nl: 'Dit is een oefening.', en: 'This is an exercise.', ar: 'هذا تمرين.', pl: 'To jest ćwiczenie.', tr: 'Bu bir alıştırma.', uk: 'Це вправа.' },
   pickOne: { nl: 'Kies 1 antwoord.', en: 'Choose 1 answer.', ar: 'اختر إجابة واحدة.', pl: 'Wybierz 1 odpowiedź.', tr: '1 cevap seç.', uk: 'Обери 1 відповідь.' },
   listen: { nl: 'Luister', en: 'Listen', ar: 'استمع', pl: 'Posłuchaj', tr: 'Dinle', uk: 'Послухати' },

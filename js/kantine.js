@@ -231,8 +231,22 @@ function stagger(id, people, fn, min = 0.08, max = 0.4) {
 
 // In de ruzie kijken de anderen in de kantine om naar Dennis: niet allemaal tegelijk en niet
 // allemaal even ver (wie dichtbij zit draait verder mee).
+// In de ruzie valt de kantine stil: het geroezemoes zakt in ~1 s ongeveer 12 dB weg en komt
+// daarna langzaam terug.
+let murmurDucks = [];
+function hushCanteen(on) {
+  if (!audio.ready) return;
+  const t = audio.ctx.currentTime;
+  for (const d of murmurDucks) {
+    d.gain.cancelScheduledValues(t);
+    d.gain.setTargetAtTime(on ? 0.25 : 1, t, on ? 0.35 : 2.0);
+  }
+}
+
 function everyoneLooks(id) {
   bgStare = true;
+  hushCanteen(true);
+  later(id, 6, () => hushCanteen(false));
   stagger(id, [bg1, bg2, bg3, sandra], (p) => {
     p.settle(8);
     p.lookTarget = headOf(dennis);
@@ -245,6 +259,7 @@ function everyoneLooks(id) {
 
 function resetBackground() {
   bgStare = false;
+  hushCanteen(false);
   bg1.lookTarget = headOf(bg2);
   bg2.lookTarget = headOf(bg1);
   bg3.lookTarget = tablePoint('bg3', 0.1, 0.3);
@@ -758,6 +773,7 @@ async function branchC(id) {
   stagger(id, [marco, tomasz], (p) => (p.lookTarget = headOf(dennis)), 0.25, 0.6);
   await standUp(id, dennis, 'dennis');
   dennis.setHands('angry');
+  dennis.angerTarget = 1; // echt boos, niet stoer
 
   // "Wat zeg jij? Het was een GRAPJE!"
   // Prikgebaar: echt naar de speler wijzen, niet losjes omhoog.
@@ -830,7 +846,10 @@ function setupAudio() {
   for (const [x, z, y, level] of [[-3.5, -0.6, 1.2, 1], [-0.5, -6.2, 1.5, 0.55], [6.5, -2.2, 1.5, 0.35]]) {
     const pn = audio.spatial({ ref: 1.5, rolloff: 1.1 });
     audio.place(pn, V(x, z, y));
-    audio.murmur(pn, level);
+    const duck = audio.ctx.createGain();
+    duck.connect(pn);
+    murmurDucks.push(duck);
+    audio.murmur(duck, level);
   }
   coffeePanner = audio.spatial({ ref: 1.5, rolloff: 1.1 });
   audio.place(coffeePanner, V(SPOTS.coffee.x, -6.1, 1.2));

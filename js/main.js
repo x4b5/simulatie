@@ -224,6 +224,15 @@ const LINE_EMO = {
   s1: { shout: 0.45 },
 };
 
+// Doel voor een prikgebaar naar de speler. Dichtbij (< 1,4 m) eindigt de hand op borsthoogte
+// (25 cm lager), anders schuift de handschoen voor Marco's mond en valt de lipsync weg.
+function jabChest() {
+  const v = playerChest(new THREE.Vector3());
+  const d = Math.hypot(v.x - marco.root.position.x, v.z - marco.root.position.z);
+  if (d < 1.4) v.y -= 0.25;
+  return v;
+}
+
 // Punt vlak voor iemand op heuphoogte: doel voor een hakgebaar.
 function chopPoint(p) {
   const f = new THREE.Vector3(Math.sin(p.root.rotation.y), 0, Math.cos(p.root.rotation.y));
@@ -399,7 +408,7 @@ async function runIntro(id) {
 
   await say(id, 'm1', [
     [0.0, () => marco.setHands('shout')], // hand al bij het eerste "Hé!" van het stuur
-    [0.6, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.6)],
+    [0.6, () => marco.jab('r', jabChest(), 0.6)],
   ]);
   // Geen dode stilte: Marco hijgt na en begint al aan zijn volgende zin terwijl hij van de
   // treeplank stapt en naar je toe loopt (eerst was het hier 6,5 s stil).
@@ -525,7 +534,7 @@ async function branchB(id) {
   marco.angerTarget = 0.85;
   await say(id, 'b1', [
     [0.0, () => marco.setHands('armsOut')],
-    [1.9, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.8)],
+    [1.9, () => marco.jab('r', jabChest(), 0.8)],
     [3.0, () => marco.setHands('angry')],
   ]);
   let walk = null;
@@ -557,8 +566,8 @@ async function branchC(id) {
   shake(0.04);
   await say(id, 'c1', [
     [0.0, () => marco.setHands('shout')],
-    [1.38, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.6)],
-    [2.85, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.5)],
+    [1.38, () => marco.jab('r', jabChest(), 0.6)],
+    [2.85, () => marco.jab('r', jabChest(), 0.5)],
     [3.5, () => marco.setHands('armsOut')],
   ]);
   sandra.root.visible = true;
@@ -580,8 +589,8 @@ async function branchC(id) {
   await say(id, 's1', [
     [0.0, () => sandra.setHands('calm')],
     [1.6, () => (sandra.lookTarget = playerHead)],
-    [2.9, () => sandra.setHands('firm')],
-    [4.3, () => {
+    // Geen praatloop met opgeheven hand (leest als 'hoi'): ze wijst naar het kantoor.
+    [3.95, () => {
       sandra.setAim('r', OFFICE);
       sandra.lookTarget = marcoHead;
     }],

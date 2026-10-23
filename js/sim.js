@@ -245,7 +245,10 @@ function desiredLook() {
     const dx = t.x - tmp2.x;
     const dy = t.y - tmp2.y;
     const dz = t.z - tmp2.z;
-    return [Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz))];
+    // Staand scherm: het kijkdoel op ~35% van de hoogte i.p.v. in het midden (anders is de
+    // bovenste helft van het beeld plafond).
+    const tall = camera.aspect < 0.8 ? Math.atan(0.3 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) : 0;
+    return [Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)) - tall];
   }
   return [look.fYaw, look.fPitch];
 }

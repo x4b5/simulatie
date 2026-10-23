@@ -55,10 +55,18 @@ export const ICONS = {
   boxHands: svg('<rect x="13" y="6" width="22" height="22" rx="1"/><path d="M24 6v6"/><path d="M3 44l5-9V24a3 3 0 0 1 3-3h6M8 26h9M8 31h9"/><path d="M45 44l-5-9V24a3 3 0 0 0-3-3h-6M40 26h-9M40 31h-9"/>'),
   // Rolsteiger: treden, platform, leuning en wieltjes
   ladder: svg('<path d="M8 42L26 13h13v29M14 33h8M19 24h8"/><path d="M4 29L22 4h18v9"/><circle cx="9" cy="44" r="2"/><circle cx="38" cy="44" r="2"/>'),
+  // Waarschuwingsdriehoek (gevaar)
+  warn: svg('<path d="M24 5L44 41H4z"/><path d="M24 18v11"/><circle cx="24" cy="34.5" r="1.6" fill="currentColor"/>'),
+  // Spreekballon met uitroepteken (iets stelligs zeggen)
+  speechBang: svg('<path d="M8 7h32a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H22l-9 8v-8H8a4 4 0 0 1-4-4V11a4 4 0 0 1 4-4z"/><path d="M24 13v9"/><circle cx="24" cy="27" r="1.6" fill="currentColor"/>'),
+  // Klembord (melden)
+  report: svg('<rect x="10" y="7" width="28" height="37" rx="3"/><path d="M18 7V4h12v3"/><path d="M16 18h16M16 25h16M16 32h9"/>'),
 };
 
-// Pictogram per antwoord en per sfeer.
-export const CHOICE_ICON = { A: 'sorry', B: 'hurry', C: 'shout' };
-export const CANTEEN_CHOICE_ICON = { A: 'hand', B: 'laugh', C: 'shout' };
-export const HENK_CHOICE_ICON = { A: 'ladder', B: 'boxHands', C: 'shout' };
+// Pictogram per antwoord en per sfeer. De pictogrammen van de antwoorden beschrijven wát je
+// zegt of doet (gevaar, haast, stop …), niet of het een goed antwoord is: geen hartje voor het
+// 'goede' antwoord en geen boos gezicht voor het 'foute'.
+export const CHOICE_ICON = { A: 'warn', B: 'hurry', C: 'hand' };
+export const CANTEEN_CHOICE_ICON = { A: 'hand', B: 'laugh', C: 'speechBang' };
+export const HENK_CHOICE_ICON = { A: 'ladder', B: 'boxHands', C: 'report' };
 export const MOOD_ICON = { calm: 'faceCalm', tense: 'faceTense', escalated: 'faceAngry' };

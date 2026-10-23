@@ -1024,8 +1024,11 @@ export function buildCanteen(scene, renderer) {
   const props = {};
   const own = (seat, tray) => (props[seat] = { cup: tray.userData.cup || null, cutlery: tray.userData.cutlery || null });
   onTable(makeTray({ food: 'bread', cup: true }), 'player', 0, 0.36);
-  own('dennis', onTable(makeTray({ food: 'stew', cup: true, color: 'grey' }), 'dennis', 0.02, 0.54, 0.05));
-  own('marco', onTable(makeTray({ food: 'soup', cup: true }), 'marco', -0.03, 0.54, -0.06));
+  // De dienbladen liggen naast/voor de handen (de zit-mocap legt de onderarmen op het blad),
+  // niet eronder: anders ligt er een hand in de stamppot of de soep. Dennis zit tegenover de
+  // speler, dus zijn blad schuift opzij in plaats van naar voren.
+  own('dennis', onTable(makeTray({ food: 'stew', cup: true, color: 'grey' }), 'dennis', -0.2, 0.54, 0.05));
+  own('marco', onTable(makeTray({ food: 'soup', cup: true }), 'marco', -0.15, 0.72, -0.06));
   own('bg1', onTable(makeTray({ food: 'stew', cup: false, bottle: true, color: 'grey' }), 'bg1', 0, 0.54));
   own('bg2', onTable(makeTray({ food: 'bread', cup: true }), 'bg2', 0, 0.54, 0.1));
   props.bg3 = { cup: onTable(cupMesh(), 'bg3', 0.12, 0.28), phone: onTable(phoneMesh(), 'bg3', -0.14, 0.3, 0.25) };

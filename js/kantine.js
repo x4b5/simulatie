@@ -6,7 +6,7 @@ import { UI, LINES, CHOICES, OUTCOMES } from './i18n-kantine.js';
 import { CANTEEN_CHOICE_ICON } from './icons.js';
 import {
   V, renderer, scene, rig, audio, S, simT, runId, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
-  look, lookAtFn, lookDir, snapLook, flinch, playerHead, playerChest, say, playerSays,
+  look, lookAtFn, lookDir, lookFrame, snapLook, flinch, playerHead, playerChest, say, playerSays,
   stopVoice, hideSub, setPhase, goChoice, start,
 } from './sim.js';
 
@@ -62,6 +62,8 @@ async function makeCast() {
     load('models/sandra.fbx', 'f101', 'models/anim_f', lunch('f101k')),
   ]);
   cast = [marco, dennis, tomasz, bg1, bg2, bg3, sandra];
+  // Tomasz in een donkergroen werkjack: zo is hij te onderscheiden van de collega's in het blauw.
+  tomasz.tintClothes('vec3(0.27, 0.39, 0.27)');
   // Niemand heeft in de pauze gereedschap bij zich (gordel, tasjes, duimstok; de duimstok van Tomasz
   // prikte ook door het tafelblad).
   for (const p of cast) {
@@ -82,6 +84,8 @@ async function makeCast() {
   scene.add(tray);
   // Eigen kopje, bestek en (bij de collega die alleen zit) telefoon: om af en toe iets mee te doen.
   for (const [p, seat] of [[marco, 'marco'], [dennis, 'dennis'], [bg1, 'bg1'], [bg2, 'bg2'], [bg3, 'bg3']]) p.props = { ...canteen.props[seat] };
+  // Dennis zit vlak naast de speler: zijn arm met het kopje zou voor de lens langs gaan.
+  dennis.noSip = true;
   for (const p of [bg1, bg2, bg3, sandra]) p.fidgetRate = 1.3;
 
   // Achtergrond: twee collega's in gesprek, één alleen met koffie, Sandra bij de koffieautomaat.
@@ -311,7 +315,7 @@ async function sitDown(id, p, name, side) {
   p.clearForced();
   await p.walkTo([[corner.x, corner.z]], 0.95);
   guard(id);
-  const spot = at(0, 0.55, TABLE_H);
+  const spot = at(-0.1, 0.7, TABLE_H); // voorbij de handen, zodat er geen hand in de soep ligt
   await turnTo(id, p, spot);
   await wait(0.2);
   guard(id);
@@ -336,6 +340,7 @@ async function sitDown(id, p, name, side) {
   const front = at(0, 0.04);
   await p.walkTo([[front.x, front.z]], 0.6);
   guard(id);
+  p.sitStage = 'front';
   p.faceYaw = s.yaw;
   await wait(0.75);
   guard(id);
@@ -455,11 +460,12 @@ function resetScene(state) {
 // ------------------------------------------------------------------
 // Emotie per regel. laugh: stukken (s) waarin de opname lacht; daarop schokken borst en schouders.
 const LINE_EMO = {
+  // pre/tail: aanloop en stilte rond de regel (zie say() in sim.js). Dennis valt Tomasz in de rede.
   t1: { smile: 0.3 },
-  d1: { smile: 0.45, sarcasm: 0.5 },
-  t2: { worry: 0.6, smile: 0.1 },
-  d2: { smile: 0.55, laugh: [[0, 0.98], [2.22, 3.3]] },
-  ml: { smile: 0.3, laugh: [[0.1, 1.76]] },
+  d1: { smile: 0.45, sarcasm: 0.5, pre: 0.42 },
+  t2: { worry: 0.6, smile: 0.1, pre: 0.55, tail: 0.0 },
+  d2: { smile: 0.55, laugh: [[0, 0.98], [2.22, 3.3]], pre: 0.05 },
+  ml: { smile: 0.3, laugh: [[0.1, 1.76]], pre: 0.1 },
   d3: { smile: 0.5, laugh: [[0.2, 0.86]] },
   a1: { sarcasm: 0.6 },
   a2: { worry: 0.35 },
@@ -467,7 +473,7 @@ const LINE_EMO = {
   a3: { smile: 0.4, worry: 0.15 },
   b1: { smile: 0.6, laugh: [[0, 1.04]] },
   b2: { sad: 0.8 },
-  b3: { worry: 0.55 },
+  b3: { worry: 0.55, pre: 0.6 },
   c1: { shout: 1 },
   c2: { shout: 0.4 },
   c3: { sad: 0.5, worry: 0.3 },
@@ -534,10 +540,16 @@ async function runIntro(id) {
   lookAtFn(groupLook([dennis, tomasz], 0.1), 1.8);
   dennis.lean = 0.2;
   await say(id, 'd2', [
-    [0.9, () => {
-      tomasz.mood = { sad: 0.55 };
+    // Tomasz lacht eerst beleefd mee (gemaskeerde glimlach), die dan instort.
+    [0.35, () => (tomasz.mood = { smile: 0.35, worry: 0.25 })],
+    [1.2, () => tomasz.avert(0.7, 0.2)],
+    [1.6, () => {
+      tomasz.mood = { sad: 0.6 };
       tomasz.playForced('listenSad', 1, true, 0.8);
+      tomasz.nod(0.3);
     }],
+    [2.1, () => (tomasz.lookTarget = headOf(marco))],
+    [2.7, () => (tomasz.lookTarget = headOf(dennis))],
     [1.7, () => dennis.jab('r', tablePoint('dennis', -0.12, 0.42), 0.35)],
     [2.4, () => marco.chuckle(1.2, 0.4)],
     [3.0, () => (tomasz.lookTarget = tablePoint('tomasz', 0.1, 0.25))],
@@ -570,20 +582,23 @@ function onChoice() {
   for (const p of [dennis, marco, tomasz]) p.settle(99);
   stagger(runId, [dennis, marco, tomasz], (p) => (p.lookTarget = playerHead), 0.05, 0.35);
   dennis.lean = 0.06;
-  // Iets lager kijken, zodat de gezichten boven het keuzepaneel blijven.
-  lookAtFn(groupLook([dennis, marco, tomasz], 0.55), 2);
+  // Alle drie de gezichten in de vrije strook boven het keuzepaneel (zie lookFrame in sim.js).
+  const hv = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  // Volgorde = belang: Tomasz (om hem gaat het), Dennis, dan Marco (valt op een smal scherm af).
+  lookFrame(() => [tomasz, dennis, marco].map((p, i) => p.headWorld(hv[i])), 2.2);
 }
 
 async function runBranch(id, key) {
   stagger(id, [dennis, marco, tomasz], (p) => (p.lookTarget = playerHead));
-  // Na het antwoord van de speler mogen ze weer af en toe iets voor zichzelf doen.
-  later(id, 4, () => {
-    for (const p of [dennis, marco, tomasz]) p.fidgetT = rnd(4, 10);
-  });
+  // Tijdens de emotionele kern van een tak doet niemand iets voor zichzelf (geen koffie drinken
+  // terwijl Dennis sorry zegt). Pas na de laatste zin mag dat weer.
+  for (const p of [dennis, marco, tomasz]) p.settle(99);
   lookAtFn(faceOf(dennis), 3);
   if (key === 'A') await branchA(id);
   else if (key === 'B') await branchB(id);
   else await branchC(id);
+  guard(id);
+  for (const p of [dennis, marco, tomasz]) p.fidgetT = rnd(3, 8);
 }
 
 async function branchA(id) {
@@ -596,8 +611,13 @@ async function branchA(id) {
   later(id, 1.6, () => (marco.lookTarget = tablePoint('marco', 0, 0.4)));
   await playerSays(id, 'A');
 
-  // "Pff. Het is maar een grapje, joh." (armen over elkaar). Eerst diep in: het "pff" is de uitademing.
+  // "Pff. Het is maar een grapje, joh." (armen over elkaar). Eerst even een ongemakkelijke
+  // stilte (grens aangeven kost iets), dan diep in: het "pff" is de uitademing.
   dennis.angerTarget = 0.3;
+  dennis.lookTarget = tablePoint('dennis', 0, 0.5);
+  await wait(0.9);
+  guard(id);
+  dennis.lookTarget = playerHead;
   dennis.sigh(0.9);
   await wait(0.55);
   guard(id);
@@ -631,23 +651,25 @@ async function branchA(id) {
   tomasz.lookTarget = tablePoint('tomasz', 0, 0.4);
   marco.lookTarget = headOf(tomasz);
   lookAtFn(faceOf(tomasz), 2);
-  await sitDown(id, tomasz, 'tomasz', 1);
+  // "Dank je. Ik hoor dat bijna elke dag." al tijdens het aanschuiven (geen lange stilte).
+  tomasz.sitStage = null;
+  const sit = detach(sitDown(id, tomasz, 'tomasz', 1));
+  await until(() => tomasz.sitStage === 'front' || id !== runId);
+  guard(id);
   tomasz.lookTarget = playerHead;
   dennis.lookTarget = headOf(tomasz);
   lookAtFn(faceOf(tomasz), 2.5);
-  await wait(0.4);
-  guard(id);
-
-  // "Dank je. Ik hoor dat bijna elke dag."
   await say(id, 'a3', [
     [1.1, () => (tomasz.lookTarget = tablePoint('tomasz', 0, 0.35))],
     [2.3, () => (tomasz.lookTarget = headOf(dennis))],
   ]);
+  await sit;
+  guard(id);
   tomasz.mood = { smile: 0.35 };
   tomasz.lookTarget = playerHead;
   marco.nod();
   lookAtFn(groupLook([dennis, marco, tomasz], 0.2), 1.5);
-  await wait(2.4);
+  await wait(1.8);
   guard(id);
 }
 
@@ -662,6 +684,9 @@ async function branchB(id) {
     marco.lookTarget = tablePoint('marco', 0, 0.4);
     marco.sitClip = 'sitTableNervous'; // Marco zit er ongemakkelijk bij
   });
+  // De kern van B is Tomasz' reactie: die moet je zien terwijl je meelacht.
+  later(id, 0.6, () => lookAtFn(faceOf(tomasz), 2.6));
+  later(id, 2.8, () => lookAtFn(faceOf(dennis), 2.4));
   await playerSays(id, 'B');
 
   // "Zie je wel! Hij snapt het."
@@ -700,22 +725,21 @@ async function branchB(id) {
   marco.lookTarget = headOf(tomasz);
   lookAtFn(faceOf(marco), 2.2);
   await say(id, 'b3', [[1.1, () => (marco.lookTarget = playerHead)]]);
-  await leave;
-  guard(id);
-  // Tot slot: Tomasz zit alleen aan een andere tafel.
+  // Tot slot: Tomasz gaat alleen aan een andere tafel zitten. De nabespreking komt er al
+  // overheen (geen 10 s stilte); het gaan zitten loopt erachter door.
   lookAtFn(faceOf(tomasz), 1.6);
-  await wait(2.6);
+  await Promise.race([leave, wait(3.0)]);
   guard(id);
 }
 
 async function branchC(id) {
   // De speler scheldt terug. Dennis schrikt en wordt boos; hij staat op.
   later(id, 0.5, () => {
-    dennis.react('startle');
+    dennis.react('recoil');
     dennis.mood = {};
-    marco.surprise = 0.6;
-    tomasz.surprise = 0.5;
   });
+  // De hele tafel schrikt, niet tegelijk.
+  stagger(id, [marco, tomasz], (p) => p.react('recoil'), 0.5, 0.9);
   await playerSays(id, 'C');
   dennis.angerTarget = 0.95;
   dennis.lean = 0;
@@ -758,16 +782,22 @@ async function branchC(id) {
   dennis.lookTarget = headOf(tomasz);
   dennis.setHands('crossed');
   later(id, 1.5, () => marco.shake());
-  await tomasz.walkTo([[1.7, -1.9], [4.9, -2.2], [SPOTS.door.x, SPOTS.door.z]], 1.15);
-  guard(id);
-  await swingDoor(true);
-  guard(id);
-  await tomasz.walkTo([[SPOTS.hall.x, SPOTS.hall.z]], 1.15);
-  guard(id);
-  swingDoor(false);
-  dennis.lookTarget = playerHead;
-  lookAtFn(faceOf(dennis), 1.4);
-  await wait(2.2);
+  // Tomasz loopt de kantine uit; de nabespreking komt er na 3 s al overheen (geen 10 s stilte).
+  const out = detach((async () => {
+    await tomasz.walkTo([[1.7, -1.9], [4.9, -2.2], [SPOTS.door.x, SPOTS.door.z]], 1.15);
+    guard(id);
+    await swingDoor(true);
+    guard(id);
+    await tomasz.walkTo([[SPOTS.hall.x, SPOTS.hall.z]], 1.15);
+    guard(id);
+    swingDoor(false);
+  })());
+  lookAtFn(faceOf(tomasz), 1.4);
+  later(id, 2.0, () => {
+    dennis.lookTarget = playerHead;
+    lookAtFn(faceOf(dennis), 1.4);
+  });
+  await Promise.race([out, wait(3.2)]);
   guard(id);
 }
 

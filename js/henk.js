@@ -9,7 +9,7 @@ import { UI, LINES, CHOICES, OUTCOMES } from './i18n-henk.js';
 import { HENK_CHOICE_ICON } from './icons.js';
 import {
   $, V, scene, renderer, camera, rig, audio, S, simT, runId, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
-  look, tmp, yawTo, lookAtFn, lookDir, snapLook, playerWalk, playerStop, flinch, shake, playerHead, playerChest, say,
+  look, tmp, yawTo, lookAtFn, lookDir, lookFrame, snapLook, playerWalk, playerStop, flinch, shake, playerHead, playerChest, say,
   playerSays, stopVoice, hideSub, setPhase, goChoice, start,
 } from './sim.js';
 
@@ -776,8 +776,9 @@ async function tugLoop(id) {
 function onChoice() {
   henk.lookTarget = playerHead;
   henk.torsoFollow = 0.55;
-  // Iets lager kijken, zodat Henks gezicht boven het keuzepaneel blijft.
-  lookAtFn(faceOf(henk, 1.05), 2);
+  // Henks gezicht in de vrije strook boven het keuzepaneel (zie lookFrame in sim.js).
+  const hv = new THREE.Vector3();
+  lookFrame(() => [henk.headWorld(hv)], 2);
 }
 
 async function runBranch(id, key) {

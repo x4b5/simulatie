@@ -396,7 +396,7 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
   backdrop-filter: blur(10px);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: hidden; overflow-y: auto; /* past het niet, dan scrolt het hele paneel, niet een binnenvak */
   z-index: 4;
   animation: slide 0.5s ease-out both;
   --mood: var(--calm);
@@ -413,7 +413,7 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
 .r-title-tr { margin-top: 4px; color: var(--muted); font: 600 1.05rem/1.2 var(--display); }
 /* Eén kaart tegelijk: pictogram, kopje, één of twee korte zinnen. */
 .r-card {
-  flex: 1; min-height: 0; overflow-y: auto;
+  flex: none;
   margin: 16px 22px 0; padding: 20px;
   display: grid; align-content: start; gap: 6px;
   border-radius: 12px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line);
@@ -450,6 +450,48 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
 .r-actions { display: grid; gap: 10px; padding: 0 22px 18px; }
 .r-actions .btn { width: 100%; justify-content: flex-start; }
 
+/* Overgang bij terugspoelen (Kies een ander antwoord, Opnieuw, Naar de keuze). */
+.veil {
+  position: fixed; inset: 0; z-index: 3;
+  display: grid; place-items: center;
+  background: #000; opacity: 0; pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.veil.on { opacity: 1; }
+.veil-msg { display: flex; align-items: center; gap: 14px; padding: 0 var(--gutter); color: var(--fg); }
+.veil-msg .ic { width: 48px; height: 48px; color: var(--signal); flex: none; }
+.veil-txt { display: grid; gap: 4px; }
+.veil-nl { font: 700 1.5rem/1.2 var(--display); }
+.veil-tr { color: var(--muted); font-size: 1rem; }
+
+/* Voorlezen (Web Speech API): alleen zichtbaar als de browser een Nederlandse stem heeft. */
+.read-btn {
+  display: none; align-items: center; gap: 8px;
+  min-height: 44px; padding: 6px 14px 6px 10px;
+  border-radius: 999px; border: 2px solid rgba(238, 241, 238, 0.3);
+  background: rgba(255, 255, 255, 0.06); color: var(--fg);
+  font: 700 1rem/1 var(--body); cursor: pointer;
+}
+body.can-read .read-btn { display: inline-flex; }
+.read-btn .ic { width: 24px; height: 24px; }
+.read-btn:hover, .read-btn.playing { border-color: var(--walk-bright); color: var(--walk-bright); }
+.read-btn.playing .ic { animation: pulse 0.8s ease-in-out infinite alternate; }
+.story-listen { justify-self: start; margin-top: -2px; }
+.c-head { position: relative; }
+body.can-read .c-head { padding-right: 140px; }
+.c-listen { position: absolute; top: 0; right: 0; }
+.r-card { position: relative; }
+.r-listen { position: absolute; top: 12px; right: 12px; }
+/* Vertalingen in de nabespreking: groot genoeg om te lezen, als eigen blok in de leesrichting. */
+.r-card-tr, .r-quote-tr, .r-all-tr {
+  font-size: 17px !important; line-height: 1.5; color: #c3ccc7 !important;
+  padding: 4px 0 4px 10px; border-left: 3px solid rgba(238, 241, 238, 0.18);
+}
+.r-card-tr[dir="rtl"], .r-quote-tr[dir="rtl"], .r-all-tr[dir="rtl"] {
+  font-size: 19px !important; line-height: 1.6;
+  padding: 4px 10px 4px 0; border-left: 0; border-right: 3px solid rgba(238, 241, 238, 0.18);
+}
+
 /* ---------- Smal scherm ---------- */
 @media (max-width: 760px) {
   body { font-size: 16px; }
@@ -466,16 +508,54 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
   .r-head { padding: 14px 16px 0; }
   .r-face { width: 48px; height: 48px; }
   .r-card { margin: 12px 16px 0; padding: 16px; }
-  .r-card-ic { width: 56px; height: 56px; }
-  .r-nav { padding: 12px 16px 14px; }
+  .r-card { grid-template-columns: 44px minmax(0, 1fr); gap: 4px 12px; }
+  .r-card > * { grid-column: 2; }
+  .r-card > .r-card-ic { grid-column: 1; grid-row: 1 / span 2; width: 44px; height: 44px; margin: 0; }
+  .r-card-h { padding-right: 52px; }
+  .r-listen { top: 10px; right: 10px; padding: 8px; }
+  .r-listen .lbl { display: none; }
+  .r-card-body { margin-top: 4px !important; font-size: 1.2rem; line-height: 1.38; }
+  .r-quote, .r-all { margin-top: 8px; padding: 8px 12px; }
+  .r-quote-nl { font-size: 1.2rem; }
+  .r-card > .r-quote, .r-card > .r-all { grid-column: 1 / -1; }
+  .r-head { gap: 10px; }
+  .r-face { width: 38px; height: 38px; }
+  .r-title { font-size: 1.7rem; }
+  .r-card-tr, .r-quote-tr, .r-all-tr { font-size: 16px !important; line-height: 1.4; }
+  .r-card-tr[dir="rtl"], .r-quote-tr[dir="rtl"], .r-all-tr[dir="rtl"] { font-size: 18px !important; line-height: 1.45; }
+  .r-all .ic { width: 26px; height: 26px; }
+  .r-actions { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .r-actions .btn { padding: 8px 12px; font-size: 1.05rem; }
+  .r-nav { padding: 8px 16px 8px; }
+  .r-arrow, .r-next { min-height: 48px; }
   .r-actions { padding: 0 16px 14px; }
   .choice { padding: 14px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); max-height: calc(100% - 76px); }
   .c-keys { display: none; }
-  .reflect { top: auto; left: var(--gutter); right: var(--gutter); width: auto; max-height: calc(100% - 80px); bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); }
+  /* Staand scherm: keuzepaneel zo laag mogelijk houden, zodat de gezichten erboven passen. */
+  .choice { max-height: 64%; padding: 10px 12px; }
+  .c-head { margin-bottom: 8px; }
+  .c-title { font-size: 1.7rem; }
+  .c-sub, .c-sub-tr { display: none; }
+  .c-list { gap: 6px; }
+  .opt { padding: 8px 56px 8px 10px; }
+  .opt-icon { width: 34px; height: 34px; }
+  .opt-key { width: 26px; height: 26px; font-size: 1rem; }
+  .opt-nl { font-size: 1.02rem; line-height: 1.3; }
+  .opt-tr { font-size: 0.86rem; line-height: 1.3; }
+  body.can-read .c-head { padding-right: 56px; }
+  .c-listen { padding: 8px; }
+  .c-listen .lbl { display: none; }
+  .reflect { top: auto; left: var(--gutter); right: var(--gutter); width: auto; max-height: calc(100% - 70px); bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); }
   .hud { width: 160px; transform: rotate(-3deg) scale(0.9); transform-origin: bottom right; bottom: calc(env(safe-area-inset-bottom, 0px) + 140px); }
   .subs { bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); padding: 10px 14px 12px; }
   .tb-lang select { max-width: 6.5rem; }
-  .other-ex { position: static; grid-template-columns: 1fr 1fr; justify-items: stretch; }
+  .other-ex { position: static; grid-template-columns: 1fr 1fr; justify-items: stretch; order: 10; }
+  /* De startknop altijd in beeld (niet onder de vouw), de andere oefeningen onderaan. */
+  .start-buttons {
+    position: sticky; bottom: -24px; z-index: 1;
+    margin: 0 calc(-1 * var(--gutter)); padding: 10px var(--gutter) 12px;
+    background: linear-gradient(180deg, rgba(11, 13, 16, 0) 0%, rgba(11, 13, 16, 0.96) 28%);
+  }
   .other-h { grid-column: 1 / -1; text-align: start; margin: 0; }
   .other-ex a { border-radius: 12px; padding: 8px 10px; align-items: flex-start; }
 }
@@ -484,6 +564,55 @@ body[data-phase="title"] .topbar > * { pointer-events: none; }
   .tb-lang select { max-width: 5.6rem; }
 }
 
+@media (max-height: 760px) and (min-width: 761px) {
+  /* Keuzepaneel compact onderin, zodat het gezicht erboven in beeld blijft. */
+  .choice { padding: 10px 14px 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); max-height: 56%; }
+  .c-head { margin-bottom: 8px; }
+  .c-title { font-size: 1.7rem; }
+  .c-title-tr { font-size: 0.95rem; margin-top: 2px; }
+  .c-sub { margin-top: 2px; font-size: 0.95rem; }
+  .c-sub-tr { font-size: 0.85rem; margin-top: 0; }
+  .c-list { gap: 8px; }
+  .opt { padding: 10px 12px 54px; gap: 6px 10px; }
+  .opt-icon { width: 44px; height: 44px; }
+  .opt-key { width: 30px; height: 30px; font-size: 1.15rem; }
+  .opt-nl { font-size: 1.08rem; line-height: 1.3; }
+  .opt-tr { font-size: 0.88rem; }
+  .opt-listen { bottom: 8px; left: 12px; min-height: 40px; }
+  .c-keys { display: none; }
+  /* Liggend scherm met weinig hoogte (tablet, ingezoomd digibord): de nabespreking compact,
+     pictogram naast het kopje, knoppen naast elkaar; past het dan nog niet, dan scrolt het
+     hele paneel (niet een binnenvak). */
+  .reflect {
+    width: min(46rem, calc(100% - 2 * var(--gutter)));
+    max-height: calc(100% - env(safe-area-inset-top, 0px) - 70px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    overflow-y: auto;
+  }
+  .r-head { padding: 8px 16px 0; gap: 10px; }
+  .r-face { width: 34px; height: 34px; }
+  .r-mood { font-size: 12px; }
+  .r-title { font-size: 1.35rem; }
+  .r-title-tr { font-size: 0.9rem; margin-top: 0; }
+  .r-card {
+    flex: none; overflow: visible; min-height: auto;
+    margin: 8px 16px 0; padding: 10px 14px;
+    grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px; gap: 3px 12px;
+  }
+  .r-card > * { grid-column: 2; }
+  .r-card > .r-card-ic { grid-column: 1; grid-row: 1 / span 2; width: 40px; height: 40px; margin: 0; }
+  .r-card > .r-quote, .r-card > .r-all { grid-column: 1 / -1; }
+  .r-card-h { font-size: 1.3rem; padding-right: 120px; }
+  .r-listen { top: 8px; right: 8px; min-height: 40px; }
+  .r-card-body { margin-top: 2px !important; font-size: 1.12rem; line-height: 1.35; }
+  .r-quote, .r-all { margin-top: 6px; padding: 6px 12px; }
+  .r-quote-nl { font-size: 1.12rem; }
+  .r-card-tr, .r-quote-tr, .r-all-tr { line-height: 1.35; padding-top: 2px; padding-bottom: 2px; }
+  .r-nav { padding: 6px 16px 8px; }
+  .r-arrow, .r-next { min-height: 46px; }
+  .r-actions { grid-template-columns: 1fr 1fr; padding: 0 16px 10px; gap: 8px; }
+  .r-actions .btn { min-height: 48px; padding: 6px 12px; }
+}
 @media (max-height: 560px) {
   .hud { width: 150px; padding: 8px; bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 66px); transform: rotate(-3deg); }
   .hud-dest { font-size: 20px; }

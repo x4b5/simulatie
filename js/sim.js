@@ -155,10 +155,12 @@ export function yawTo(from, to) {
 }
 export function lookAtFn(fn, rate = 4) {
   look.fn = fn;
+  look.dirFn = null;
   look.rate = rate;
 }
 export function lookDir(yaw, pitch, rate = 3) {
   look.fn = null;
+  look.dirFn = null;
   look.fYaw = yaw;
   look.fPitch = pitch;
   look.rate = rate;
@@ -168,7 +170,75 @@ export function snapLook() {
   look.yaw = y;
   look.pitch = p;
 }
+// choiceEl wordt verderop gezet; lookFrame leest het pas tijdens het spelen.
+let choiceEl = null;
+// Keuzekader: kijk zo dat alle gezichten (heads: functie → [Vector3, …]) in de vrije strook
+// tussen de bovenbalk en het keuzepaneel vallen; is de groep te breed, dan tijdelijk een
+// grotere beeldhoek (tot 80°, staand scherm 95°). Zo blijft de emotionele aanleiding van de
+// keuze in beeld terwijl je kiest.
+const _fh = new THREE.Vector3();
+export function lookFrame(heads, rate = 2) {
+  look.fn = null;
+  look.rate = rate;
+  look.dirFn = () => {
+    const all = heads();
+    camera.getWorldPosition(_fh);
+    const aspect = camera.aspect || 1;
+    const maxV = aspect < 1 ? 95 : 80;
+    const maxH = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(maxV) / 2) * aspect);
+    // De eerste in de lijst is het belangrijkst; past de groep niet (staand scherm), dan vallen
+    // de laatsten af.
+    let n = all.length;
+    let y0;
+    let ymin;
+    let ymax;
+    let esum;
+    for (;;) {
+      y0 = null;
+      ymin = 0;
+      ymax = 0;
+      esum = 0;
+      for (let i = 0; i < n; i++) {
+        const h = all[i];
+        const dx = h.x - _fh.x;
+        const dz = h.z - _fh.z;
+        const y = Math.atan2(-dx, -dz);
+        if (y0 === null) y0 = y;
+        const r = shortAngle(y - y0);
+        ymin = Math.min(ymin, r);
+        ymax = Math.max(ymax, r);
+        esum += Math.atan2(h.y - _fh.y, Math.hypot(dx, dz));
+      }
+      if (n === 1 || ymax - ymin + 0.3 <= maxH * 0.86) break;
+      n--;
+    }
+    const pts = all.slice(0, n);
+    const yaw = y0 + (ymin + ymax) / 2;
+    const spread = ymax - ymin + 0.3; // plus een hoofdbreedte aan beide kanten
+    const base = baseFov();
+    const hfovBase = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(base) / 2) * aspect);
+    let vfov = base;
+    if (spread > hfovBase * 0.86) vfov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(spread / 0.86 / 2) / aspect));
+    vfov = Math.min(vfov, maxV);
+    look.fovWant = vfov;
+    // Vrije strook: onder de bovenbalk, boven het keuzepaneel (of 55% van de hoogte).
+    const H = window.innerHeight || 1;
+    const top = 64;
+    const panel = choiceEl && !choiceEl.hidden ? choiceEl.getBoundingClientRect().top : H * 0.55;
+    const mid = (top + 0.9 * (Math.max(top + 40, panel) - top) * 0.5) / H; // iets boven het midden van de strook (kin vrij)
+    const yNdc = 1 - 2 * mid;
+    const pitch = esum / pts.length - Math.atan(yNdc * Math.tan(THREE.MathUtils.degToRad(vfov) / 2));
+    return [yaw, THREE.MathUtils.clamp(pitch, -1.0, 0.6)];
+  };
+}
+function baseFov() {
+  const w = window.innerWidth || 1;
+  const h = window.innerHeight || 1;
+  return w / h < 0.8 ? 78 : 68;
+}
+
 function desiredLook() {
+  if (look.dirFn) return look.dirFn();
   if (look.fn) {
     const t = look.fn(tmp);
     camera.getWorldPosition(tmp2);
@@ -207,6 +277,11 @@ export function pathRemaining() {
 // Speler deinst terug: korte verplaatsing (x,z in meters) en even door de knieën.
 let crouch = 0;
 export function flinch(delta, dur = 0.4, duck = true) {
+  // VR: niet het beeld verplaatsen (dat geeft misselijkheid); alleen een tik in de controllers.
+  if (renderer.xr.isPresenting) {
+    haptic(0.6, 120);
+    return;
+  }
   const from = rig.position.clone();
   const to = from.clone().add(delta);
   tween(dur, (k) => {
@@ -214,6 +289,44 @@ export function flinch(delta, dur = 0.4, duck = true) {
     rig.position.lerpVectors(from, to, e);
     if (duck && !reduceMotion) crouch = Math.sin(k * Math.PI) * 0.09;
   }).then(() => (crouch = 0));
+}
+
+function haptic(strength, ms) {
+  try {
+    const session = renderer.xr.getSession();
+    for (const src of session?.inputSources || []) {
+      const h = src.gamepad?.hapticActuators?.[0];
+      if (h?.pulse) h.pulse(strength, ms);
+      else src.gamepad?.vibrationActuator?.playEffect?.('dual-rumble', { duration: ms, strongMagnitude: strength });
+    }
+  } catch (e) {
+    /* geen trilfunctie */
+  }
+}
+
+// VR-comfort: tijdens gedwongen lopen een tunnelvignet (randen donker, midden vrij), zodat het
+// zien van beweging zonder zelf te lopen minder misselijk maakt. Alleen in VR zichtbaar.
+const tunnel = new THREE.Mesh(
+  new THREE.PlaneGeometry(2, 2),
+  new THREE.ShaderMaterial({
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    uniforms: { amount: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float amount; varying vec2 vUv; void main(){ float r = length(vUv - 0.5) * 2.0; float a = smoothstep(0.38, 0.75, r) * amount; gl_FragColor = vec4(0.0, 0.0, 0.0, a); }',
+  }),
+);
+tunnel.position.z = -0.1;
+tunnel.scale.setScalar(0.22);
+tunnel.renderOrder = 9998;
+tunnel.frustumCulled = false;
+tunnel.visible = false;
+camera.add(tunnel);
+function updateTunnel() {
+  const on = renderer.xr.isPresenting ? player.moving : 0;
+  tunnel.material.uniforms.amount.value = Math.min(0.92, on * 1.1);
+  tunnel.visible = on > 0.02;
 }
 
 export function shake(a) {
@@ -245,8 +358,12 @@ export async function say(id, key, cues = []) {
   // Wie gaat praten, rondt een eigen handeling (slokje, nek wrijven) eerst af.
   person.settle?.(3);
   // Eerst zichtbaar inademen, dan pas spreken.
+  // Beurtwisseling niet mechanisch gelijk: per regel kan het scenario de aanloop (pre, standaard
+  // 0,22 s) en de stilte erna (tail, standaard 0,15 s) zetten in lineEmo; invallen of juist
+  // een pijnlijke stilte.
+  const timing = scn.lineEmo?.[key] || {};
   person.inhale(0.32);
-  await wait(0.22);
+  await wait(timing.pre ?? 0.22);
   guard(id);
   showSub({ who: line.who, key });
   stopVoice();
@@ -262,7 +379,7 @@ export async function say(id, key, cues = []) {
   else person.talk = live ? () => audio.features(v.analyser) : fakeTalk();
   S.subClock = clock;
   for (const [t, fn] of cues) later(id, t, fn);
-  await wait(dur + 0.15);
+  await wait(dur + (timing.tail ?? 0.15));
   person.stopSpeaking();
   person.talk = null;
   guard(id);
@@ -399,7 +516,10 @@ export function setPhase(p) {
   const frozen = p === 'choice';
   // Bij de keuze begint niemand aan iets nieuws (kopje pakken, nek wrijven …): rust in beeld.
   LIFE.quiet = frozen;
-  S.worldScaleTarget = frozen ? 0.12 : 1;
+  // Bij de keuze loopt de wereld nog 0,8 s op gewone snelheid, zodat iedereen zich eerst
+  // helemaal naar de speler draait ("iedereen kijkt naar jou"), en vertraagt dan pas.
+  S.worldScaleTarget = 1;
+  S.freezeAt = frozen ? simT + 0.8 : 0;
   S.exposureTarget = frozen ? 0.85 : p === 'reflect' ? 0.85 : 1;
   $('#skip').hidden = p !== 'intro';
 }
@@ -423,7 +543,7 @@ function pick(key) {
   });
 }
 
-const choiceEl = $('#choice');
+choiceEl = $('#choice');
 function renderChoice() {
   if (S.phase !== 'choice') return;
   const { UI, CHOICES } = T;
@@ -497,8 +617,142 @@ function stopPreview() {
   for (const b of choiceEl.querySelectorAll('.opt-listen.playing')) b.classList.remove('playing');
 }
 
+// ------------------------------------------------------------------
+// Voorlezen van UI-tekst (startscherm, keuzevraag, nabespreking) met de Web Speech API.
+// Eerst het Nederlands, daarna de vertaling (als er een stem voor die taal is). Zonder
+// Nederlandse stem in de browser blijven de voorleesknoppen verborgen.
+// ------------------------------------------------------------------
+const TTS_LANG = { nl: 'nl-NL', en: 'en-GB', ar: 'ar-SA', pl: 'pl-PL', tr: 'tr-TR', uk: 'uk-UA' };
+const tts = { synth: null, voices: [], btn: null, auto: false, token: 0 };
+try {
+  tts.synth = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? window.speechSynthesis : null;
+} catch (e) {
+  tts.synth = null;
+}
+function ttsLoadVoices() {
+  try {
+    tts.voices = tts.synth ? tts.synth.getVoices() : [];
+  } catch (e) {
+    tts.voices = [];
+  }
+  document.body.classList.toggle('can-read', !!ttsVoice('nl'));
+}
+function ttsVoice(lang) {
+  const want = (TTS_LANG[lang] || lang).toLowerCase();
+  const base = want.slice(0, 2);
+  const list = tts.voices.filter((v) => (v.lang || '').toLowerCase().replace('_', '-').startsWith(base));
+  if (!list.length) return null;
+  // Liefst de juiste regio (nl-NL, niet nl-BE), en een lokale stem (werkt ook zonder internet).
+  return list.find((v) => v.lang.toLowerCase().replace('_', '-') === want && v.localService) || list.find((v) => v.lang.toLowerCase().replace('_', '-') === want) || list[0];
+}
+if (tts.synth) {
+  ttsLoadVoices();
+  tts.synth.addEventListener?.('voiceschanged', ttsLoadVoices);
+}
+export function stopReading() {
+  tts.token++;
+  if (tts.synth) {
+    try {
+      tts.synth.cancel();
+    } catch (e) {
+      /* niets */
+    }
+  }
+  if (tts.btn) tts.btn.classList.remove('playing');
+  tts.btn = null;
+}
+// parts: [[tekst, taal], …]. Leest ze na elkaar voor; nogmaals op dezelfde knop = stoppen.
+function readAloud(parts, btn) {
+  if (btn && tts.btn === btn) {
+    stopReading();
+    return;
+  }
+  stopReading();
+  stopPreview();
+  if (!tts.synth || S.muted) return;
+  const todo = parts.filter(([text, lang]) => text && ttsVoice(lang));
+  if (!todo.length) return;
+  const token = tts.token;
+  tts.btn = btn || null;
+  btn?.classList.add('playing');
+  todo.forEach(([text, lang], i) => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = ttsVoice(lang);
+    u.lang = u.voice?.lang || TTS_LANG[lang] || lang;
+    u.rate = lang === 'nl' ? 0.86 : 0.92; // rustig tempo, voor wie net Nederlands leert
+    if (i === todo.length - 1) {
+      u.onend = u.onerror = () => {
+        if (token !== tts.token) return;
+        btn?.classList.remove('playing');
+        tts.btn = null;
+      };
+    }
+    tts.synth.speak(u);
+  });
+  window.__sim && (window.__sim.lastRead = todo.map(([t, l]) => `${l}:${t}`));
+}
+// Tekst voor voorlezen: de vertaling na het Nederlands, als die er is.
+function withTr(entries) {
+  const nl = [];
+  const tr = [];
+  for (const e of entries) {
+    if (!e) continue;
+    const [a, b] = pair(e, S.lang);
+    const end = (t) => (/[.!?:…؟]["”»]?$/.test(t) ? t : `${t}.`); // kopjes: korte pauze erna
+    nl.push(end(a));
+    if (b) tr.push(end(b));
+  }
+  const out = [[nl.join(' '), 'nl']];
+  if (tr.length) out.push([tr.join(' '), S.lang]);
+  return out;
+}
+function makeReadBtn(cls, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = `read-btn ${cls}`;
+  b.innerHTML = `<span class="ic">${ICONS.speaker}</span><span class="lbl"></span>`;
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onClick(b);
+  });
+  return b;
+}
+function labelReadBtns() {
+  const l = pair(T.UI.listen, S.lang)[0];
+  for (const b of document.querySelectorAll('.read-btn')) {
+    b.querySelector('.lbl').textContent = l;
+    b.setAttribute('aria-label', l);
+  }
+}
+function readStory(btn) {
+  const keys = [...document.querySelectorAll('#start .story [data-t]')].map((el) => el.dataset.t);
+  if (T.UI.noteShort) keys.push('noteShort');
+  readAloud(withTr(keys.map((k) => T.UI[k])), btn);
+}
+function readPrompt(btn) {
+  readAloud(withTr([T.UI.prompt, T.UI.pickOne]), btn);
+}
+function readCard(btn) {
+  if (S.phase !== 'reflect') return;
+  tts.auto = true; // wie één keer laat voorlezen, krijgt de volgende kaarten ook voorgelezen
+  const cards = reflectionCards(S.outcome);
+  const c = cards[Math.min(S.card || 0, cards.length - 1)];
+  const entries = [c.head, c.body];
+  if (c.quote) entries.push(T.UI.sayIt, c.quote);
+  if (c.last && S.tried.size === 3) entries.push(T.UI.allTried);
+  readAloud(withTr(entries), btn);
+}
+function setupReadButtons() {
+  const story = $('#start .story');
+  if (story) story.after(makeReadBtn('story-listen', readStory));
+  $('#choice .c-head')?.appendChild(makeReadBtn('c-listen', readPrompt));
+  $('#reflect .r-card')?.prepend(makeReadBtn('r-listen', readCard));
+  labelReadBtns();
+}
+
 function hideChoice() {
   stopPreview();
+  stopReading();
   choiceEl.hidden = true;
   vrui.clearPanel();
 }
@@ -526,6 +780,8 @@ function reflectionCards(key) {
     { icon: 'eye', head: UI.what, body: o.what },
     { icon: 'bulb', head: UI.why, body: o.why },
     { icon: 'tip', head: UI.tip, body: o.tip, quote: o.quote },
+    // Extra kaarten van een oefening (bijv. de kantine: "En als het over jou gaat?").
+    ...(o.extra || []),
     { icon: 'question', head: UI.q, body: o.q, last: true },
   ];
 }
@@ -591,6 +847,17 @@ function renderReflection() {
   $('#btn-restart .b-nl').textContent = pair(UI.restart, S.lang)[0];
   setTr($('#btn-restart .b-tr'), pair(UI.restart, S.lang)[1]);
   reflEl.hidden = false;
+  // Past het paneel niet helemaal (kleine telefoon), dan in elk geval de knoppen in beeld.
+  reflEl.scrollTop = 0;
+  if (c.last && reflEl.scrollHeight > reflEl.clientHeight + 2) q('.r-actions').scrollIntoView({ block: 'nearest' });
+  // Voorlezen: na één keer 'Luister' wordt elke volgende kaart vanzelf voorgelezen.
+  stopReading();
+  if (tts.auto && !S.muted) {
+    const at = S.card;
+    setTimeout(() => {
+      if (S.phase === 'reflect' && S.card === at && !reflEl.hidden) readCard(q('.r-listen'));
+    }, 600);
+  }
 
   // VR: dezelfde kaart op een paneel, met vorige/volgende.
   const dir = langDir(S.lang);
@@ -616,6 +883,7 @@ function renderReflection() {
       ]
     : [{ label: `${pair(UI.next, S.lang)[0]}  →`, primary: true, onSelect: () => stepCard(1) }];
   if (n > 0) buttons.unshift({ label: `←  ${pair(UI.back, S.lang)[0]}`, onSelect: () => stepCard(-1) });
+  if (ttsVoice('nl')) buttons.push({ label: pair(UI.listen, S.lang)[0], onSelect: () => readCard(q('.r-listen')) });
   vrui.showReflection(sec, buttons, moodColor, dir);
 }
 
@@ -627,35 +895,99 @@ function stepCard(d) {
 }
 
 function hideReflection() {
+  stopReading();
   reflEl.hidden = true;
   vrui.clearPanel();
 }
 
-function retry() {
-  hideReflection();
+// Overgang bij terugspoelen: kort naar zwart (scherm én VR), dan pas alles terugzetten. Zo
+// springt er niets zichtbaar en zie je met pictogram en tekst dat de tijd terug is gezet.
+let veilEl = null;
+let veilMesh = null;
+function setupVeil() {
+  veilEl = document.createElement('div');
+  veilEl.className = 'veil';
+  veilEl.setAttribute('aria-hidden', 'true');
+  veilEl.innerHTML = `<div class="veil-msg"><span class="ic">${ICONS.retry}</span><span class="veil-txt"><span class="veil-nl"></span><span class="veil-tr"></span></span></div>`;
+  document.body.appendChild(veilEl);
+  veilMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthTest: false, depthWrite: false }),
+  );
+  veilMesh.position.z = -0.12;
+  veilMesh.renderOrder = 9999;
+  veilMesh.visible = false;
+  veilMesh.frustumCulled = false;
+  camera.add(veilMesh);
+}
+const VEIL_S = 0.35;
+async function veil(on, msg = null) {
+  if (!veilEl) return;
+  const msgEl = veilEl.querySelector('.veil-msg');
+  msgEl.hidden = !msg;
+  if (msg) {
+    const [nl, tr] = pair(msg, S.lang);
+    veilEl.querySelector('.veil-nl').textContent = nl;
+    setTr(veilEl.querySelector('.veil-tr'), tr);
+  }
+  veilEl.classList.toggle('on', on);
+  const from = veilMesh.material.opacity;
+  const to = on ? 1 : 0;
+  veilMesh.visible = true;
+  const t0 = performance.now();
+  await new Promise((res) => {
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / (VEIL_S * 1000));
+      veilMesh.material.opacity = from + (to - from) * k;
+      if (k < 1) requestAnimationFrame(step);
+      else res();
+    };
+    step();
+  });
+  if (!on) veilMesh.visible = false;
+}
+
+function rewindToChoice(holdMsg) {
   run(async (id) => {
+    await veil(true, holdMsg);
+    guard(id);
+    stopVoice();
+    hideSub();
     scn.reset('choice');
     setPhase('branch');
-    await wait(0.5);
+    snapLook();
+    await waitReal(holdMsg ? 0.6 : 0.1);
+    guard(id);
+    veil(false);
+    await wait(0.3);
     guard(id);
     goChoice();
   });
+}
+
+function retry() {
+  hideReflection();
+  rewindToChoice(T.UI.rewind);
 }
 
 function restart() {
   hideReflection();
   hideChoice();
-  run(scn.intro);
+  run(async (id) => {
+    if (S.phase !== 'title' && S.phase !== 'loading') {
+      await veil(true);
+      guard(id);
+      stopVoice();
+    }
+    const p = scn.intro(id); // zet de beginstand meteen (vóór het eerste wachten)
+    snapLook();
+    veil(false);
+    await p;
+  });
 }
 
 function skipIntro() {
-  run(async (id) => {
-    scn.reset('choice');
-    setPhase('branch');
-    await wait(0.3);
-    guard(id);
-    goChoice();
-  });
+  rewindToChoice(null);
 }
 
 // ------------------------------------------------------------------
@@ -685,6 +1017,7 @@ function setLang(code) {
     /* geen opslag */
   }
   renderStatic();
+  labelReadBtns();
   if (S.sub) renderSub();
   if (S.phase === 'choice') renderChoice();
   if (S.phase === 'reflect') renderReflection();
@@ -724,6 +1057,7 @@ async function ensureAudio() {
 }
 
 async function startDesktop() {
+  stopReading();
   $('#start').hidden = true;
   await ensureAudio();
   showDragHint();
@@ -776,6 +1110,8 @@ function showDragHint() {
 function bindUI() {
   fillLangSelects();
   renderStatic();
+  setupReadButtons();
+  setupVeil();
   $('#btn-start').addEventListener('click', startDesktop);
   $('#btn-vr').addEventListener('click', startVR);
   $('#btn-retry').addEventListener('click', retry);
@@ -790,6 +1126,7 @@ function bindUI() {
   $('#tb-mute').addEventListener('click', () => {
     S.muted = !S.muted;
     audio.setMuted(S.muted);
+    if (S.muted) stopReading();
     $('#tb-mute').setAttribute('aria-pressed', String(S.muted));
   });
   $('#tb-fs').addEventListener('click', () => {
@@ -861,7 +1198,7 @@ function onResize() {
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
-  camera.fov = w / h < 0.8 ? 78 : 68;
+  camera.fov = baseFov();
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', onResize);
@@ -893,11 +1230,22 @@ function updatePlayer(dt) {
 function updateCamera(dt) {
   if (renderer.xr.isPresenting) return;
   const [dy, dp] = desiredLook();
-  look.yaw = angleDamp(look.yaw, dy, look.rate, dt);
-  look.pitch += (dp - look.pitch) * (1 - Math.exp(-look.rate * dt));
+  // Geen zwiepen: de geleide blik draait hooguit 120°/s (in een tak 65°/s), zodat het
+  // aanvoelt als je eigen hoofd dat omkijkt en niet als een camera die wegschiet.
+  const vmax = ((S.phase === 'branch' ? 65 : 120) * Math.PI) / 180;
+  const k = 1 - Math.exp(-look.rate * dt);
+  const lim = vmax * dt;
+  look.yaw += THREE.MathUtils.clamp(shortAngle(dy - look.yaw) * k, -lim, lim);
+  look.pitch += THREE.MathUtils.clamp((dp - look.pitch) * k, -lim, lim);
   if (simT - look.lastUser > 2.4) {
     look.uYaw *= Math.exp(-1.6 * dt);
     look.uPitch *= Math.exp(-1.6 * dt);
+  }
+  // Beeldhoek: tijdelijk groter als het keuzekader dat vraagt, daarna rustig terug.
+  const fovT = look.dirFn && look.fovWant ? Math.max(baseFov(), look.fovWant) : baseFov();
+  if (Math.abs(camera.fov - fovT) > 0.05) {
+    camera.fov += (fovT - camera.fov) * (1 - Math.exp(-2.5 * dt));
+    camera.updateProjectionMatrix();
   }
   look.shake *= Math.exp(-5 * dt);
   const sh = look.shake;
@@ -973,6 +1321,10 @@ function loop() {
     }
   }
 
+  if (S.freezeAt && simT >= S.freezeAt) {
+    S.freezeAt = 0;
+    if (S.phase === 'choice') S.worldScaleTarget = 0.12;
+  }
   S.worldScale += (S.worldScaleTarget - S.worldScale) * (1 - Math.exp(-4 * dt));
   const wdt = dt * S.worldScale;
   renderer.toneMappingExposure += (S.exposureTarget - renderer.toneMappingExposure) * (1 - Math.exp(-3 * dt));
@@ -985,6 +1337,7 @@ function loop() {
     rig.position.y = vrLift;
   }
   updatePlayer(dt);
+  updateTunnel();
   scn.update(dt, wdt);
   updateCamera(dt);
   scn.lateUpdate?.(dt, wdt);
@@ -992,6 +1345,37 @@ function loop() {
   vrui.update(dt);
   tickKaraoke();
   renderer.render(scene, camera);
+}
+
+// Prestaties (tablet, VR): kleine voorwerpen (kopjes, bestek, flesjes, borden, etiketten)
+// werpen geen schaduw; hun schaduw is onzichtbaar klein maar kost elk een extra draw call in de
+// schaduwpass. Op telefoon/tablet en in VR een kleinere, goedkopere schaduwkaart.
+const LOW_END = /Android|iPhone|iPad|Mobile|Quest|OculusBrowser/i.test(navigator.userAgent || '');
+function lightenShadows() {
+  let culled = 0;
+  const box = new THREE.Box3();
+  const size = new THREE.Vector3();
+  scene.traverse((n) => {
+    if (!n.isMesh || n.isSkinnedMesh || !n.castShadow || !n.geometry) return;
+    box.setFromObject(n).getSize(size);
+    if (Math.max(size.x, size.y, size.z) < 0.3) {
+      n.castShadow = false;
+      culled++;
+    }
+  });
+  const lowQ = () => {
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    scene.traverse((n) => {
+      if (n.isLight && n.castShadow && n.shadow.mapSize.x > 1024) {
+        n.shadow.mapSize.set(1024, 1024);
+        n.shadow.map?.dispose();
+        n.shadow.map = null;
+      }
+    });
+  };
+  if (LOW_END) lowQ();
+  renderer.xr.addEventListener('sessionstart', lowQ);
+  S.shadowCulled = culled;
 }
 
 // ------------------------------------------------------------------
@@ -1009,7 +1393,7 @@ export async function start(scenario) {
   eye = scenario.eye ?? 1.65;
   camera.position.set(0, eye, 0);
   window.__sim = Object.defineProperties(
-    { S, pick, skipIntro, restart, retry, stepCard, previewChoice, rig, camera, look, vrui },
+    { S, pick, skipIntro, restart, retry, stepCard, previewChoice, rig, camera, look, vrui, showReflection, readCard, stopReading },
     { simT: { get: () => simT }, ...Object.getOwnPropertyDescriptors(scenario.debug || {}) },
   );
 
@@ -1030,11 +1414,17 @@ export async function start(scenario) {
     .then((r) => r.json())
     .catch(() => ({}));
   await scenario.build();
+  lightenShadows();
   scenario.reset('start');
   setPhase('title');
   renderer.setAnimationLoop(loop);
   checkVR();
 
+  // Luidheidstabel per opname (tools/loudness.py); zonder tabel klinkt alles zoals opgenomen.
+  fetch(`${scenario.audioDir}gain.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((g) => (audio.gains = g || {}))
+    .catch(() => (audio.gains = {}));
   const voiceIds = [...Object.keys(T.LINES), 'pA', 'pB', 'pC'];
   audioPrefetch = Promise.all(voiceIds.map((id) => audio.prefetch(id, `${scenario.audioDir}${id}.mp3`)));
   await audioPrefetch;

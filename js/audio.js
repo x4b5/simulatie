@@ -215,13 +215,18 @@ export class AudioEngine {
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
     src.buffer = buf;
+    // Luidheid gelijktrekken per opname (tools/loudness.py → gain.json). De analyser voor de
+    // lipsync krijgt het signaal vóór die correctie, zodat de mond niet anders gaat bewegen.
+    const norm = this.gains?.[id] ?? 1;
     const g = ctx.createGain();
-    g.gain.value = 1.35;
+    g.gain.value = 1.35 * norm;
+    const pre = ctx.createGain();
+    pre.gain.value = 1.35;
     const an = ctx.createAnalyser();
     an.fftSize = 1024;
     an.smoothingTimeConstant = 0.2;
     src.connect(g);
-    g.connect(an);
+    src.connect(pre).connect(an);
     g.connect(panner);
     const ended = new Promise((r) => (src.onended = r));
     const startTime = ctx.currentTime;

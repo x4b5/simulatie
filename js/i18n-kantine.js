@@ -253,6 +253,22 @@ export const CHOICES = {
   },
 };
 
+// Transfer naar de kandidaat zelf: veel kandidaten spreken zelf met een accent en zijn soms
+// zelf Tomasz. Deze kaart komt in alle drie de takken vóór 'Denk na'.
+const SELF_CARD = {
+  icon: 'group',
+  head: { nl: 'En als het over jou gaat?', en: 'And if it is about you?', ar: 'وإذا كان الأمر عنك أنت؟', pl: 'A jeśli chodzi o ciebie?', tr: 'Peki ya konu sensen?', uk: 'А якщо йдеться про тебе?' },
+  body: {
+    nl: 'Lacht iemand om jouw Nederlands? Dat is niet oké. Gebeurt het vaak? Zeg het tegen je leidinggevende.',
+    en: 'Does someone laugh at your Dutch? That is not okay. Does it happen often? Tell your manager.',
+    ar: 'هل يضحك أحد على لغتك الهولندية؟ هذا غير مقبول. هل يحدث ذلك كثيرًا؟ أخبر مديرك.',
+    pl: 'Ktoś śmieje się z twojego niderlandzkiego? To nie jest w porządku. Zdarza się to często? Powiedz przełożonemu.',
+    tr: 'Biri senin Felemenkçene mi gülüyor? Bu doğru değil. Sık oluyor mu? Yöneticine söyle.',
+    uk: 'Хтось сміється з твоєї нідерландської? Це не нормально. Це трапляється часто? Скажи керівникові.',
+  },
+  quote: { nl: 'Ik vind dat niet leuk. Stop.', en: "I don't like that. Stop.", ar: 'لا يعجبني ذلك. توقّف.', pl: 'Nie podoba mi się to. Przestań.', tr: 'Bundan hoşlanmıyorum. Dur.', uk: 'Мені це не подобається. Припини.' },
+};
+
 // Nabespreking per keuze: korte kaarten (taalniveau A2), elk met een pictogram.
 export const OUTCOMES = {
   A: {
@@ -292,12 +308,12 @@ export const OUTCOMES = {
       uk: 'Я не вважаю це смішним.',
     },
     q: {
-      nl: 'Gebeurt dit vaak? Dan kun je het ook tegen je leidinggevende zeggen.',
-      en: 'Does this happen often? Then you can also tell your manager.',
-      ar: 'هل يحدث هذا كثيرًا؟ يمكنك أيضًا أن تخبر مديرك.',
-      pl: 'Czy to się często zdarza? Możesz też powiedzieć o tym przełożonemu.',
-      tr: 'Bu sık oluyor mu? O zaman yöneticine de söyleyebilirsin.',
-      uk: 'Це трапляється часто? Тоді можна сказати й керівникові.',
+      nl: 'Hoe voelt het om iets te zeggen als iedereen lacht?',
+      en: 'How does it feel to say something when everyone is laughing?',
+      ar: 'كيف تشعر عندما تقول شيئًا والجميع يضحكون؟',
+      pl: 'Jak to jest powiedzieć coś, kiedy wszyscy się śmieją?',
+      tr: 'Herkes gülerken bir şey söylemek nasıl hissettirir?',
+      uk: 'Як це — сказати щось, коли всі сміються?',
     },
   },
   B: {
@@ -391,3 +407,6 @@ export const OUTCOMES = {
     },
   },
 };
+
+// De transferkaart in elke tak.
+for (const k of ['A', 'B', 'C']) OUTCOMES[k].extra = [SELF_CARD];

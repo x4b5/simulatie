@@ -665,12 +665,18 @@ body.can-read .c-head { padding-right: 140px; }
 }
 
 /* Telefoon liggend (weinig hoogte): alles compact, de knoppen altijd in beeld. */
-@media (max-height: 440px) and (orientation: landscape) {
-  .start { align-items: flex-start; padding-top: 12px; padding-bottom: 0; }
-  .start-card { margin: 0 auto 0 0; width: min(44rem, 100%); gap: 8px; }
-  .start h1 { font-size: 2.2rem; }
-  .start h1 .t-tr { display: inline; margin: 0 0 0 10px; font-size: 0.45em; }
-  .start h1 .t-tr[dir="rtl"] { margin: 0 10px 0 0; }
+/* Liggend scherm met weinig hoogte (telefoon liggend, 960×540): startscherm in twee kolommen,
+   het verhaal links, taal en startknop rechts, altijd in beeld. */
+@media (max-height: 600px) and (orientation: landscape) {
+  .start { align-items: flex-start; padding-top: 12px; padding-bottom: 12px; }
+  .start-card {
+    margin: 0; width: min(60rem, 100%); gap: 8px 24px;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start;
+  }
+  .start-card > * { grid-column: 1; }
+  .start-card > .start-controls { grid-column: 2; grid-row: 1 / span 8; position: sticky; top: 0; align-self: start; margin-top: 0; }
+  .start h1 { font-size: clamp(2rem, 6vh, 3rem); }
+  .start h1 .t-tr { margin-top: 2px; font-size: 0.45em; }
   .story { gap: 4px; }
   .story .ic { width: 36px; height: 36px; padding: 6px; }
   .story .t-nl { font-size: 1rem; }
@@ -679,15 +685,13 @@ body.can-read .c-head { padding-right: 140px; }
   .note .ic { width: 24px; height: 24px; }
   .sound { display: none; }
   .other-ex { display: none; }
-  .start-controls { grid-template-columns: auto 1fr; align-items: end; gap: 8px 12px; }
-  .field { gap: 2px; }
+  .start-controls { grid-template-columns: 1fr; gap: 8px; }
+  .field { gap: 2px; max-width: none; }
   .field select { height: 40px; }
-  .start-buttons {
-    position: sticky; bottom: 0; z-index: 1; padding: 8px 0 10px;
-    background: linear-gradient(180deg, rgba(11, 13, 16, 0) 0%, rgba(11, 13, 16, 0.96) 30%);
-  }
-  .start-controls > .vr-note { grid-column: 1 / -1; }
-
+  .start-buttons { position: static; display: grid; gap: 8px; margin: 0; padding: 0; background: none; }
+  .start-buttons .btn { width: 100%; }
+}
+@media (max-height: 440px) and (orientation: landscape) {
   /* Keuze: drie kolommen, minimaal kopje, het paneel mag hoger worden en scrollen. */
   .choice { max-height: calc(100% - 58px); padding: 6px 10px 8px; bottom: 4px; }
   .c-head { margin-bottom: 4px; }
@@ -741,4 +745,15 @@ body.can-read .c-head { padding-right: 140px; }
   .r-actions { grid-template-columns: 1fr 1fr; padding: 0 14px 6px; gap: 6px; }
   .r-actions .btn { min-height: 40px; padding: 4px 10px; font-size: 0.95rem; }
   .subs { padding: 6px 12px 8px; }
+}
+
+/* Past de nabespreking niet (kleine telefoon, lange vertaling), dan scrolt de kaart en blijft
+   de navigatie (Volgende) onderaan in beeld. */
+.r-nav { position: sticky; bottom: 0; z-index: 1; background: var(--panel-solid); border-radius: 0 0 var(--radius) var(--radius); }
+.reflect:has(.r-actions:not([hidden])) .r-nav { border-radius: 0; }
+/* Op de keuzekaart staat de hele zin al vertaald: de chips zelf zonder vertaling, op één regel. */
+.opt .pic-tr { display: none; }
+.opt .pic { padding: 2px 8px 2px 4px; font-size: 0.88rem; }
+@media (max-height: 760px) and (min-width: 761px) {
+  .c-sub, .c-sub-tr { display: none; }
 }

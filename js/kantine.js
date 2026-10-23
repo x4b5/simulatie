@@ -777,12 +777,13 @@ async function branchC(id) {
 
   // "Wat zeg jij? Het was een GRAPJE!"
   // Prikgebaar: echt naar de speler wijzen, niet losjes omhoog.
+  // Geen 'firm'-houding hier: die mocap zet de rechterhand op gezichtshoogte, en een prik die
+  // daarmee mengt kwam soms met de handpalm voor Dennis' eigen gezicht. De prik telt nu volledig.
   await say(id, 'c1', [
-    [0.0, () => dennis.setHands('firm')],
     // Prik naar de speler, die zit: het doel ligt lager, zodat de arm schuin omlaag wijst en
     // niet voor Dennis' eigen gezicht langs gaat.
-    [0.4, () => dennis.jab('r', playerChest(new THREE.Vector3()).add(_c.set(0, -0.22, 0)), 0.95, 0.75)],
-    [1.8, () => dennis.jab('r', playerChest(new THREE.Vector3()).add(_c.set(0, -0.22, 0)), 0.85, 0.75)],
+    [0.4, () => dennis.jab('r', playerChest(new THREE.Vector3()).add(_c.set(0, -0.22, 0)), 0.95, 0.95)],
+    [1.8, () => dennis.jab('r', playerChest(new THREE.Vector3()).add(_c.set(0, -0.22, 0)), 0.85, 0.95)],
   ]);
   dennis.setHands('angry');
 

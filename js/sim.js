@@ -195,7 +195,7 @@ export function lookFrame(heads, rate = 2) {
     const aspect = camera.aspect || 1;
     const maxV = aspect < 1 ? 95 : 80;
     const maxH = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(maxV) / 2) * aspect);
-    const pad = aspect < 1 ? 0.4 : 0.22;
+    const pad = aspect < 1 ? 0.3 : 0.22;
     // De eerste in de lijst is het belangrijkst; past de groep niet (staand scherm), dan vallen
     // de laatsten af.
     let n = all.length;
@@ -583,8 +583,10 @@ function renderChoice() {
   const items = [];
   const listenNl = pair(UI.listen, S.lang)[0];
   for (const key of ['A', 'B', 'C']) {
+    // Kort in het Nederlands (met pictogram-chips), de vertaling wel van de hele zin.
     const short = T.CHOICE_SHORT?.[key];
-    const [nl, other] = pair(short ? short.text : CHOICES[key], S.lang);
+    const nl = pair(short ? short.text : CHOICES[key], S.lang)[0];
+    const other = pair(CHOICES[key], S.lang)[1];
     const wrap = document.createElement('div');
     wrap.className = 'opt-wrap';
     const b = document.createElement('button');

@@ -1857,7 +1857,9 @@ export class Human {
       a.up.updateMatrixWorld(true);
       // Onderarm in dezelfde richting (bij echt wijzen bijna gestrekt). In de aanloop iets
       // meer gebogen (hand omhoog/terug), zodat de slag ergens vandaan komt.
-      _v3.copy(desired).addScaledVector(_by, 0.7 * g.cock).normalize();
+      // Wijst het gebaar omlaag (naar iemand die zit), dan nauwelijks aanloop omhoog: anders komt
+      // de hand eerst naast of voor het eigen gezicht.
+      _v3.copy(desired).addScaledVector(_by, 0.7 * g.cock * (desired.y < -0.15 ? 0.25 : 1)).normalize();
       this._pointBone(a.fore, a.foreAxis, _v3, g.w * (g.point ? 0.95 : 0.6));
       a.fore.updateMatrixWorld(true);
       // Bij echt wijzen de pols recht: de hand in het verlengde van de onderarm, niet omhoog geknikt.

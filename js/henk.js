@@ -720,12 +720,14 @@ function resetScene(state) {
     aisle.box.position.z += 0.1; // Henk heeft hem nog niet naar voren getrokken
     lookDir(yawTo(P.start, P.walk1), -0.06);
     snapLook();
-  } else if (state === 'choice') {
+  } else if (state === 'choice' || state === 'choice2') {
     rig.position.copy(P.stop);
     holds.set('r', beamHold(BEAM_X, LV[2]));
     climb.goal.z = TALK_Z;
     henk.root.position.z = TALK_Z;
     henk.lookTarget = playerHead;
+    // Tweede keuze: Henk heeft je weggewuifd (x1) en wacht grijnzend op de doos.
+    if (state === 'choice2') henk.mood = { smile: 0.2, sarcasm: 0.25 };
     onChoice();
     snapLook();
   }
@@ -747,6 +749,9 @@ const LINE_EMO = {
   c1: { shout: 0.85 },
   c2: { shout: 0.2, worry: 0.2 },
   c3: { sarcasm: 0.3, sad: 0.15 },
+  // Volhouden: Henk wuift je eerste nee weg (x1) en geeft stug toe (h2: "Pff. Nou, vooruit dan.").
+  x1: { smile: 0.2, sarcasm: 0.3, pre: 0.3 },
+  h2: { sarcasm: 0.35, worry: 0.15, pre: 0.15, tail: 0.25 },
 };
 
 const PEOPLE = { henk: () => henk, marco: () => marco, sandra: () => sandra };
@@ -836,9 +841,12 @@ function onChoice() {
 async function runBranch(id, key) {
   henk.lookTarget = playerHead;
   lookAtFn(faceOf(henk), 3);
-  if (key === 'A') await branchA(id);
-  else if (key === 'B') await branchB(id);
-  else await branchC(id);
+  if (key === 'A') return branchA(id);
+  if (key === 'A2') return branchA2(id);
+  if (key === 'B2') return branchB(id, 'B2');
+  if (key === 'C2') return branchC(id, 'C2');
+  if (key === 'B') return branchB(id);
+  return branchC(id);
 }
 
 async function branchA(id) {
@@ -855,6 +863,47 @@ async function branchA(id) {
     [1.7, () => (henk.lookTarget = boxLook)],
     [3.0, () => (henk.lookTarget = playerHead)],
   ]);
+  // Hij blijft staan: "Kom op, geef nou gewoon die doos aan. Dan zijn we zo klaar."
+  henk.mood = { smile: 0.15, sarcasm: 0.3 };
+  await wait(0.3);
+  guard(id);
+  await say(id, 'x1', [
+    [0.45, () => {
+      // "geef nou gewoon die doos aan": hand en blik naar de doos.
+      henk.lookTarget = boxLook;
+      holds.set('r', tugHold(), 0.55, { out: 0.03, over: 0.4 });
+    }],
+    [1.85, () => (henk.lookTarget = playerHead)],
+    [2.25, () => holds.set('r', beamHold(BEAM_X, LV[2]), 0.55, { out: 0.03, over: 0.4 })],
+    [2.75, () => henk.nod(0.4)], // "Dan zijn we zo klaar."
+  ]);
+  henk.mood = { smile: 0.2, sarcasm: 0.25 };
+  await wait(0.9);
+  guard(id);
+  return 'choice2';
+}
+
+// A2: rustig volhouden ("Nee Henk, zo help ik je niet. Ik haal de rolsteiger."). Henk geeft stug
+// toe ("Pff. Nou, vooruit dan.") en klimt naar beneden: daarna het bestaande einde van A.
+async function branchA2(id) {
+  later(id, 0.7, () => {
+    henk.surprise = 0.25; // "Nee": dat had hij niet verwacht
+    henk.mood = { worry: 0.2 };
+  });
+  later(id, 2.2, () => (henk.lookTarget = (v) => v.set(aisle.steiger.position.x, 1.0, aisle.steiger.position.z)));
+  later(id, 3.1, () => (henk.lookTarget = playerHead));
+  await playerSays(id, 'A2');
+  await say(id, 'h2', [
+    [0.65, () => henk.sigh(0.9)], // "Pff."
+    [1.55, () => henk.shake(0.35)],
+    [2.6, () => (henk.lookTarget = V(HX, RACK - 0.1, LV[0]))], // "vooruit dan": hij kijkt al naar beneden
+  ]);
+  henk.lookTarget = playerHead;
+  await steigerEnding(id);
+}
+
+// Het einde van A: Henk klimt naar beneden, de speler haalt de rolsteiger en zet hem op de rem.
+async function steigerEnding(id) {
   henk.mood = { worry: 0.2 };
   // Toch komt hij naar beneden. De speler loopt meteen naar de rolsteiger (geen lang stuk zonder
   // woorden); Henk wacht na het afdalen aan de gangkant tot de steiger tegen de stelling staat.
@@ -1103,11 +1152,11 @@ async function pivotOnPlatform(id, yaw, dur = 1.2) {
   clink(0.1);
 }
 
-async function branchB(id) {
+async function branchB(id, key = 'B') {
   // De speler zegt ja en stapt onder de stelling. Henk reikt verder, de doos schuift weg, zijn
   // voet glijdt van de ligger: hij hangt even scheef aan de staander.
   later(id, 0.6, () => (henk.mood = { smile: 0.25 }));
-  await playerSays(id, 'B');
+  await playerSays(id, key);
   lookAtFn(faceOf(henk, 0.1), 2);
   playerWalk([P.under], 0.9);
   // De speler steekt zijn handen omhoog om de doos aan te pakken.
@@ -1239,7 +1288,7 @@ function bystandersLook(id, hold) {
   });
 }
 
-async function branchC(id) {
+async function branchC(id, key = 'C') {
   // De speler valt Henk aan en dreigt. Henk schrikt even, wordt dan boos en blijft staan.
   later(id, 0.7, () => henk.react('startle'));
   later(id, 1.6, () => (henk.angerTarget = 0.55));
@@ -1248,7 +1297,7 @@ async function branchC(id) {
   sandra.lookTarget = null;
   sandra.setHands('clipboard');
   const sw = sandra.walkTo([[1.2, 10.2], [P.sandraStop.x, P.sandraStop.z]], 1.5);
-  await playerSays(id, 'C');
+  await playerSays(id, key);
   henk.angerTarget = 0.85;
   henk.setHands('angry');
   henk.torsoFollow = 0.7;

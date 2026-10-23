@@ -224,24 +224,33 @@ export class VRUI {
     }
     const p = panelMesh(1700, blocks, { bg: 'rgba(12,14,17,0.93)', accent });
     group.add(p);
-    let x = -p.userData.w / 2;
-    const bw = (p.userData.w - 0.03 * (buttons.length - 1)) / buttons.length;
+    // Meer dan 4 knoppen (na de tweede keuze): in twee rijen, anders worden de labels te smal.
+    const perRow = buttons.length > 4 ? Math.ceil(buttons.length / 2) : buttons.length;
+    const bw = (p.userData.w - 0.03 * (perRow - 1)) / perRow;
     // Alle knoppen even hoog, ook als een label over twee regels loopt.
     const mc = document.createElement('canvas').getContext('2d');
     const bpx = Math.round(bw * PX_PER_M);
     const btnBlocks = (btn) => [{ text: btn.label, size: 38, weight: 700, color: btn.primary ? '#141414' : '#ffffff', gap: 0 }];
     const minH = Math.max(...buttons.map((btn) => Math.ceil(measureBlocks(mc, btnBlocks(btn), bpx - 60) + 60)));
-    for (const btn of buttons) {
-      const b = panelMesh(bpx, btnBlocks(btn), {
-        bg: btn.primary ? 'rgba(242,197,0,1)' : 'rgba(40,46,52,0.96)',
-        pad: 30,
-        minH,
-      });
-      b.position.set(x + bw / 2, -p.userData.h / 2 - b.userData.h / 2 - 0.03, 0);
-      x += bw + 0.03;
-      b.userData.onSelect = btn.onSelect;
-      this.buttons.push(b);
-      group.add(b);
+    let top = -p.userData.h / 2 - 0.03;
+    for (let r = 0; r * perRow < buttons.length; r++) {
+      const row = buttons.slice(r * perRow, (r + 1) * perRow);
+      let x = -(row.length * bw + 0.03 * (row.length - 1)) / 2;
+      let rowH = 0;
+      for (const btn of row) {
+        const b = panelMesh(bpx, btnBlocks(btn), {
+          bg: btn.primary ? 'rgba(242,197,0,1)' : 'rgba(40,46,52,0.96)',
+          pad: 30,
+          minH,
+        });
+        b.position.set(x + bw / 2, top - b.userData.h / 2, 0);
+        x += bw + 0.03;
+        rowH = Math.max(rowH, b.userData.h);
+        b.userData.onSelect = btn.onSelect;
+        this.buttons.push(b);
+        group.add(b);
+      }
+      top -= rowH + 0.03;
     }
     const { pos, look } = this._frontPose(1.7, 0.0);
     group.position.copy(pos);

@@ -15,7 +15,10 @@ drie oefeningen, die zich afspelen in hetzelfde distributiecentrum:
   Zie [Hoog en droog](#hoog-en-droog).
 
 Op elk startscherm staan rechtsboven links naar de twee andere oefeningen. In alle drie kiest
-de speler uit drie reacties en ziet hij wat er daarna gebeurt.
+de speler uit drie reacties en ziet hij wat er daarna gebeurt. Kiest hij de rustige reactie (A),
+dan geeft de ander niet meteen toe: hij stribbelt tegen en er volgt een **tweede keuze**
+(*Volhouden*, zie [Volhouden: de tweede keuze](#volhouden-de-tweede-keuze)). Zo oefen je ook:
+rustig blijven en je punt herhalen als de ander niet meteen luistert.
 
 - **Stijl:** realistische mensen (motion capture, gezichtsuitdrukkingen) in een licht
   gestileerde hal. Het lijkt echt genoeg om je erin te verplaatsen, maar het blijft
@@ -34,7 +37,8 @@ de speler uit drie reacties en ziet hij wat er daarna gebeurt.
   begin je opnieuw), dan houdt dat op. Heeft de browser geen Nederlandse stem maar wel een stem voor
   de vertaaltaal, dan wordt alleen de vertaling voorgelezen; zonder enige stem zijn de knoppen er niet.
 - **Even luid:** de stemopnames worden bij het afspelen gelijkgetrokken (`gain.json` per map, gemaakt
-  met `python3 tools/loudness.py`): de drie antwoorden van de speler klinken precies even luid, zodat
+  met `python3 tools/loudness.py`): de drie antwoorden van de speler klinken precies even luid (bij
+  de tweede keuze ook: `pA2`/`pB2`/`pC2`), zodat
   het volume niet verraadt welk antwoord 'goed' is; schreeuwen blijft luider dan fluisteren, maar
   hooguit ~6 LU in plaats van 15-18 LU. Draai het script opnieuw na een nieuwe opname.
 - **Pictogrammen bij de antwoorden** beschrijven wát je zegt (gevaar, haast, stop …), niet of het
@@ -53,13 +57,24 @@ Bijna-ongeluk ── heftruck komt uit de dwarsgang, claxon, remmen, hartslag
 Confrontatie ── Marco stapt uit en is boos (3 zinnen, wijst naar het voetpad)
    ▼
 Keuze (tijd staat stil)
-   ├─ A "Je hebt gelijk. Dat was gevaarlijk. Sorry."       → Marco kalmeert
+   ├─ A "Je hebt gelijk. Dat was gevaarlijk. Sorry."
+   │     → Marco is nog niet klaar: "Sorry? Daar heb ik niks aan als je straks onder mijn vork
+   │       ligt!" (wijst naar de vorken, armen over elkaar)
+   │     ▼
+   │   Keuze 2 "Wat zeg jij nu?"
+   │     ├─ A2 "Je hebt gelijk. Ik loop vanaf nu over het pad." → "Hm. Dat zeg je nu." Hij koelt af,
+   │     │      zegt ook sorry en legt het pad uit (het oude einde van A)          → Rustig
+   │     ├─ B2 "Ja ja, ik zei toch sorry."   → "Ja ja? Dit is geen grap, man." Hij stapt geërgerd
+   │     │      in en rijdt weg                                                    → Gespannen
+   │     └─ C2 "Wat wil je nou nog meer van me?" → Marco ontploft, gaat Sandra halen; Sandra komt
+   │            al aanlopen en neemt jullie mee naar kantoor                       → Ruzie
    ├─ B "Ik moest even snel naar dock 3. Ik keek heus wel uit." → blijft geïrriteerd
    └─ C "Doe normaal, man. Schreeuw niet zo tegen me!"     → escaleert, teamleider Sandra grijpt in
    ▼
 Nabespreking ── 4 kaartjes, één tegelijk: wat gebeurt er (oog), waarom (lampje),
                  tip + "zo kun je het zeggen" (ballon), denkvraag (vraagteken). Geen punten.
                  → "Kies een ander antwoord" of "Opnieuw beginnen"
+                   (na keuze 2 ook "Terug naar de eerste keuze")
 ```
 
 Bij het keuzemoment richt de blik zich zo dat het gezicht (in de kantine: Tomasz, Dennis en
@@ -70,6 +85,40 @@ beeld niet bij terugdeinzen en krijgt gedwongen lopen een tunnelvignet.
 
 Er is bewust geen goed/fout-score. Na het zien van alle drie de reacties
 stelt de oefening voor om ze in de groep te bespreken.
+
+## Volhouden: de tweede keuze
+
+Opdrachtgever: "de andere persoon reageert te makkelijk op het juiste antwoord; in de praktijk is
+dat niet zo." Daarom stribbelt de ander na antwoord A eerst tegen (één nieuwe zin, `x1`), en kiest de
+speler nog een keer: blijf je rustig en zeg je het nog eens (A2), geef je op (B2), of word je alsnog
+boos (C2)? B en C van de eerste keuze zijn ongewijzigd.
+
+- **Zelfde scherm als keuze 1:** titel *Wat zeg jij nu?*, weer A, B en C met pictogram, *Luister* per
+  antwoord, voorlezen van de vraag, toetsen 1-2-3, en in VR hetzelfde keuzepaneel. De tijd staat
+  weer stil. De pictogrammen beschrijven wat je zegt (voetstappen = over het pad lopen, ballon met
+  puntjes = 'ja ja' / 'laat maar', ballon met vraagteken, klembord = melden), niet of het goed is.
+  Boven de antwoorden staat wat de ander net zei (`x1`), met een luidsprekerknop: dan zegt hij het
+  nog een keer (met lipsync). Zo weet je ook na *Kies een ander antwoord* waar je op antwoordt. In de
+  kantine staat Dennis bij keuze 2 voorop in beeld (op een telefoon valt Marco eerst af).
+- **Vijf afloopkaarten per oefening:** B en C (zoals altijd), en na A: A2 (*Rustig*), B2
+  (*Gespannen*) en C2 (*Ruzie*). De oude nabespreking van A is A2 geworden: die benoemt dat de ander
+  eerst niet wilde luisteren en dat rustig herhalen hielp. Tip bij A2: "Blijf rustig. Zeg het nog
+  een keer. Gebruik dezelfde woorden." Bij B2 en C2 staat de zin van A2 als "zo kun je het zeggen".
+- **Al gezien:** op het tweede keuzescherm per antwoord. Op het eerste keuzescherm staat bij A pas
+  *Al gezien* als je alle drie de vervolgen van A hebt gezien (er valt achter A nog iets te
+  ontdekken). *Je hebt alles gezien* verschijnt na alle vijf de afloopkaarten.
+- **Terug:** na een afloop van keuze 2 gaat *Kies een ander antwoord* terug naar keuze 2 (Marco,
+  Dennis of Henk staat er weer net zo bij). Een tweede knop, *Terug naar de eerste keuze*
+  (pictogram ⏮), gaat naar keuze 1. *Opnieuw beginnen* blijft de hele oefening opnieuw.
+- **Regie:** de ander reageert al tijdens jouw zin (Marco schudt zijn hoofd en trekt zijn
+  wenkbrauwen op bij "Sorry", Dennis verliest zijn grijns, Henk kijkt verrast en dan naar de
+  rolsteiger), en er zitten echte pauzes in waar iemand afkoelt (Marco: "Hm. Dat zeg je nu." – stilte
+  – armen los, zucht – dan pas zijn sorry).
+- **Techniek (`js/sim.js`):** `branch(id, key)` van een scenario geeft `'choice2'` terug als er een
+  tweede keuze volgt; `reset('choice2')` zet de stand van het tweede keuzemoment terug (voor
+  *Kies een ander antwoord*), en `onChoice(stage)` krijgt mee welke keuze het is. De sleutels van de
+  tweede keuze zijn `A2`, `B2`, `C2` in `CHOICES`, `OUTCOMES`, `choiceIcon` en de stemopnames
+  (`pA2.mp3` …). Een oefening zonder `CHOICES.A2` werkt zoals vroeger (één keuze).
 
 ## Openen
 
@@ -106,6 +155,8 @@ Mogelijke vragen voor het nagesprek:
 - Waarom was Marco eigenlijk boos? Was hij boos óp jou, of geschrokken?
 - Wat merkte je bij jezelf toen hij tegen je schreeuwde?
 - Bij welke reactie werd het gesprek rustiger? Waardoor?
+- Marco luisterde niet meteen naar je sorry. Hoe voelde dat? Wat helpt dan: opgeven, boos worden,
+  of het rustig nog een keer zeggen?
 - Je mag een grens aangeven als iemand schreeuwt. Hoe doe je dat zonder ruzie?
 - Wat doe jij als je haast hebt en de veilige route langer is?
 
@@ -121,8 +172,17 @@ Intro ── lunchpauze in de kantine: geroezemoes, bestek, koffieautomaat. De s
    │     Dennis lacht hard en doet hem na, Marco grinnikt mee. "Toch? Zeg nou zelf!"
    ▼
 Keuze (tijd staat stil, alle drie kijken naar de speler)
-   ├─ A "Nee. Ik vind dat niet grappig. Laat hem gewoon."  → Marco valt bij, Dennis zegt sorry,
-   │                                                        Tomasz komt erbij zitten
+   ├─ A "Nee. Ik vind dat niet grappig. Laat hem gewoon."
+   │     → Dennis: "Pff. Het is maar een grapje, joh." en "Doe niet zo gevoelig, man. Tomasz kan
+   │       heus wel tegen een grapje. Toch, Tomasz?" (Tomasz glimlacht geforceerd en kijkt weg)
+   │     ▼
+   │   Keuze 2 "Wat zeg jij nu?"
+   │     ├─ A2 "Voor Tomasz is het geen grapje. Kap er gewoon mee." → Marco valt bij, Dennis zegt
+   │     │      mopperend sorry, Tomasz komt erbij zitten                          → Rustig
+   │     ├─ B2 "Nou ja… laat maar." → "Zie je wel. Niks aan de hand." Tomasz gaat alleen aan een
+   │     │      andere tafel zitten, Marco: "Dat was niet zo leuk voor hem, hè?"   → Gespannen
+   │     └─ C2 "Jij bent echt een sukkel, weet je dat?" → Dennis staat op, ruzie, Tomasz loopt weg
+   │                                                                               → Ruzie
    ├─ B "Haha… ja."                                        → Dennis lacht harder, Tomasz gaat
    │                                                        alleen aan een andere tafel zitten
    └─ C "Hou je kop, man. Jij bent zelf een grap!"         → Dennis staat op, ruzie, de kantine
@@ -165,7 +225,15 @@ Keuze (tijd staat stil, Henk kijkt naar de speler)
    ├─ A "Henk, kom even naar beneden? Ik schrik als ik je daar zie staan. Ik haal de trap wel."
    │       (op de keuzekaart alleen "Henk, kom even naar beneden?" met twee pictogram-chips
    │       'ik schrik' en 'ik haal de trap', zodat de lengte het antwoord niet verraadt)
-   │       → Henk moppert ("Ik doe dit al vijfentwintig jaar") maar klimt voorzichtig naar beneden.
+   │       → Henk moppert ("Ik doe dit al vijfentwintig jaar") en blijft staan: "Kom op, geef nou
+   │         gewoon die doos aan. Dan zijn we zo klaar."
+   │       ▼
+   │     Keuze 2 "Wat zeg jij nu?"
+   │       ├─ A2 "Nee Henk, zo help ik je niet. Ik haal de rolsteiger." → "Pff. Nou, vooruit dan."
+   │       │      Henk klimt naar beneden en het oude einde van A volgt (hieronder)  → Rustig
+   │       ├─ B2 "Nou, vooruit dan. Geef maar." → het einde van B (bijna-val, Marco)  → Gespannen
+   │       └─ C2 "Doe normaal! Ik ga het nu melden." → het einde van C (Sandra)      → Ruzie
+   │       Einde van A2: Henk klimt voorzichtig naar beneden.
    │         De speler loopt meteen naar de rolsteiger en duwt hem naar de stelling, en zet hem op
    │         de rem (klik, rood pedaal). "Je hebt gelijk. Vorig jaar is Ahmed zo gevallen." Henk
    │         klimt de steiger op, pakt de doos en geeft hem laag aan; de speler staat naast de
@@ -183,6 +251,8 @@ Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten
 ```
 
 - **Woorden en beeld:** de speler zegt "trap"; op de rolsteiger staat daarom een bordje TRAP.
+  Bij de tweede keuze (A2) zegt de speler "rolsteiger"; de nabespreking van A2 gebruikt daarom dat
+  woord (pictogram-chip 'rolsteiger').
   De tip van A herhaalt precies de drie stukjes van de gesproken zin (kom naar beneden, ik schrik,
   ik haal de trap). Kaart C heet "Je dreigt" en zegt erbij dat melden goed is, maar dat je het
   eerst rustig tegen Henk zegt (pictogram klembord).
@@ -235,6 +305,7 @@ Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten
 | Wat | Waar |
 | --- | --- |
 | Teksten, vertalingen en nabespreking (Bijna geraakt) | `js/i18n.js` |
+| Tweede keuze (Volhouden): teksten `x1`, `A2/B2/C2`, `prompt2`, `retryStart` | `js/i18n*.js`; regie in `branchA`, `branchA2/B2/C2` |
 | Teksten, vertalingen en nabespreking (Grap in de kantine) | `js/i18n-kantine.js` |
 | Teksten, vertalingen en nabespreking (Hoog en droog) | `js/i18n-henk.js` |
 | Namen van de oefeningen (titel en links op het startscherm) | `EXERCISES` in `js/i18n.js` |

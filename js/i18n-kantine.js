@@ -223,6 +223,31 @@ export const LINES = {
       uk: 'Не треба. Тепер знову все про мене.',
     },
   },
+  // Volhouden: Dennis na antwoord A (na a1) en na B2.
+  x1: {
+    who: 'dennis',
+    est: 5.2,
+    text: {
+      nl: "Doe niet zo gevoelig, man. Tomasz kan heus wel tegen een grapje. Toch, Tomasz?",
+      en: "Don't be so sensitive, man. Tomasz can take a joke. Right, Tomasz?",
+      ar: "لا تكن حسّاسًا هكذا يا رجل. توماش يتحمّل المزاح. أليس كذلك يا توماش؟",
+      pl: "Nie bądź taki wrażliwy, człowieku. Tomasz zniesie żart. Prawda, Tomasz?",
+      tr: "Bu kadar hassas olma be adam. Tomasz şakaya gelir. Değil mi, Tomasz?",
+      uk: "Не будь таким чутливим, чоловіче. Томаш нормально сприймає жарти. Правда, Томаше?",
+    },
+  },
+  x2: {
+    who: 'dennis',
+    est: 2.4,
+    text: {
+      nl: "Zie je wel. Niks aan de hand.",
+      en: "See? Nothing wrong.",
+      ar: "أرأيت؟ لا شيء يدعو للقلق.",
+      pl: "No widzisz. Nic się nie stało.",
+      tr: "Gördün mü? Bir şey yok.",
+      uk: "От бачиш. Нічого страшного.",
+    },
+  },
 };
 
 // De drie reacties van de speler.
@@ -251,6 +276,31 @@ export const CHOICES = {
     tr: 'Kapa çeneni, be adam. Asıl sen bir şakasın!',
     uk: 'Замовкни, чоловіче. Ти сам — жарт!',
   },
+  // Tweede keuze, na A: Dennis lacht het weg (x1).
+  A2: {
+    nl: "Voor Tomasz is het geen grapje. Kap er gewoon mee.",
+    en: "For Tomasz it's not a joke. Just stop it.",
+    ar: "بالنسبة لتوماش هذه ليست مزحة. توقّف عن ذلك فقط.",
+    pl: "Dla Tomasza to nie jest żart. Po prostu przestań.",
+    tr: "Tomasz için bu bir şaka değil. Bırak artık.",
+    uk: "Для Томаша це не жарт. Просто припини.",
+  },
+  B2: {
+    nl: "Nou ja… laat maar.",
+    en: "Well… never mind.",
+    ar: "حسنًا… لا بأس.",
+    pl: "No cóż… nieważne.",
+    tr: "Neyse… boş ver.",
+    uk: "Ну… забудь.",
+  },
+  C2: {
+    nl: "Jij bent echt een sukkel, weet je dat?",
+    en: "You are a real idiot, you know that?",
+    ar: "أنت أحمق حقًا، أتعرف ذلك؟",
+    pl: "Jesteś naprawdę głupkiem, wiesz?",
+    tr: "Sen gerçekten bir salaksın, biliyor musun?",
+    uk: "Ти справжній дурень, знаєш?",
+  },
 };
 
 // Transfer naar de kandidaat zelf: veel kandidaten spreken zelf met een accent en zijn soms
@@ -271,41 +321,41 @@ const SELF_CARD = {
 
 // Nabespreking per keuze: korte kaarten (taalniveau A2), elk met een pictogram.
 export const OUTCOMES = {
-  A: {
+  A2: {
     mood: 'calm',
-    moodLabel: BASE_OUTCOMES.A.moodLabel,
-    title: { nl: 'Je zegt rustig: stop', en: 'You calmly say: stop', ar: 'تقول بهدوء: توقّف', pl: 'Mówisz spokojnie: stop', tr: "Sakince 'dur' dersin", uk: 'Ти спокійно кажеш: стоп' },
+    moodLabel: BASE_OUTCOMES.A2.moodLabel,
+    title: { nl: "Je zegt het nog een keer", en: "You say it again", ar: "تقولها مرة أخرى", pl: "Mówisz to jeszcze raz", tr: "Bir kez daha söylersin", uk: "Ти кажеш це ще раз" },
     what: {
-      nl: 'Dennis stopt met de grap. Tomasz is blij.',
-      en: 'Dennis stops the joke. Tomasz is happy.',
-      ar: 'يتوقف دينيس عن المزاح. توماش سعيد.',
-      pl: 'Dennis przestaje żartować. Tomasz się cieszy.',
-      tr: 'Dennis şakayı bırakır. Tomasz mutlu olur.',
-      uk: 'Денніс припиняє жартувати. Томаш радіє.',
+      nl: "Dennis lacht het eerst weg. Jij zegt het nog een keer. Dan stopt hij. Tomasz komt erbij zitten.",
+      en: "At first Dennis laughs it off. You say it again. Then he stops. Tomasz sits down with you.",
+      ar: "في البداية يضحك دينيس ويتجاهل الأمر. تقولها مرة أخرى. ثم يتوقف. يجلس توماش معكم.",
+      pl: "Na początku Dennis to wyśmiewa. Mówisz to jeszcze raz. Wtedy przestaje. Tomasz siada z wami.",
+      tr: "Dennis önce gülüp geçer. Sen bir kez daha söylersin. Sonra durur. Tomasz yanınıza oturur.",
+      uk: "Спочатку Денніс відсміюється. Ти кажеш це ще раз. Тоді він припиняє. Томаш сідає з вами.",
     },
     why: {
-      nl: 'Je zegt rustig wat je vindt. Je scheldt niet. Dan kan Dennis stoppen zonder ruzie.',
-      en: "You calmly say what you think. You don't call names. Then Dennis can stop without a fight.",
-      ar: 'تقول رأيك بهدوء. لا تشتم. هكذا يستطيع دينيس أن يتوقف بدون شجار.',
-      pl: 'Spokojnie mówisz, co myślisz. Nie obrażasz. Wtedy Dennis może przestać bez kłótni.',
-      tr: 'Ne düşündüğünü sakince söylersin. Hakaret etmezsin. Böylece Dennis kavga olmadan durabilir.',
-      uk: 'Ти спокійно кажеш, що думаєш. Ти не ображаєш. Тоді Денніс може зупинитися без сварки.',
+      nl: "Je blijft rustig en je scheldt niet. Je zegt het twee keer. Dan weet Dennis: jij meent het.",
+      en: "You stay calm and you do not call names. You say it twice. Then Dennis knows: you mean it.",
+      ar: "تبقى هادئًا ولا تشتم. تقولها مرتين. عندها يعرف دينيس: أنت جادّ.",
+      pl: "Zachowujesz spokój i nie przeklinasz. Mówisz to dwa razy. Wtedy Dennis wie: mówisz serio.",
+      tr: "Sakin kalırsın ve küfretmezsin. İki kez söylersin. O zaman Dennis anlar: ciddisin.",
+      uk: "Ти залишаєшся спокійним і не обзиваєшся. Ти кажеш це двічі. Тоді Денніс розуміє: ти кажеш серйозно.",
     },
     tip: {
-      nl: 'Zeg kort en rustig: dit vind ik niet oké.',
-      en: "Say it short and calm: I don't think this is okay.",
-      ar: 'قل باختصار وبهدوء: هذا غير مقبول بالنسبة لي.',
-      pl: 'Powiedz krótko i spokojnie: to nie jest w porządku.',
-      tr: 'Kısa ve sakin söyle: Bunu doğru bulmuyorum.',
-      uk: 'Скажи коротко й спокійно: мені це не подобається.',
+      nl: "Blijf rustig. Zeg het nog een keer. Gebruik dezelfde woorden.",
+      en: "Stay calm. Say it again. Use the same words.",
+      ar: "ابقَ هادئًا. قلها مرة أخرى. استخدم الكلمات نفسها.",
+      pl: "Zachowaj spokój. Powiedz to jeszcze raz. Użyj tych samych słów.",
+      tr: "Sakin kal. Bir kez daha söyle. Aynı kelimeleri kullan.",
+      uk: "Залишайся спокійним. Скажи це ще раз. Використовуй ті самі слова.",
     },
     quote: {
-      nl: 'Ik vind dat niet grappig.',
-      en: "I don't think that's funny.",
-      ar: 'لا أرى ذلك مضحكًا.',
-      pl: 'Nie uważam, że to śmieszne.',
-      tr: 'Bunu komik bulmuyorum.',
-      uk: 'Я не вважаю це смішним.',
+      nl: "Voor Tomasz is het geen grapje. Kap er gewoon mee.",
+      en: "For Tomasz it's not a joke. Just stop it.",
+      ar: "بالنسبة لتوماش هذه ليست مزحة. توقّف عن ذلك فقط.",
+      pl: "Dla Tomasza to nie jest żart. Po prostu przestań.",
+      tr: "Tomasz için bu bir şaka değil. Bırak artık.",
+      uk: "Для Томаша це не жарт. Просто припини.",
     },
     q: {
       nl: 'Hoe voelt het om iets te zeggen als iedereen lacht?',
@@ -406,7 +456,97 @@ export const OUTCOMES = {
       uk: 'Що ти робиш, коли дуже злишся?',
     },
   },
+  B2: {
+    mood: 'tense',
+    moodLabel: BASE_OUTCOMES.B.moodLabel,
+    title: { nl: "Je geeft op", en: "You give up", ar: "تستسلم", pl: "Poddajesz się", tr: "Vazgeçersin", uk: "Ти здаєшся" },
+    what: {
+      nl: "Dennis zegt: niks aan de hand. Tomasz gaat ergens anders zitten.",
+      en: "Dennis says: nothing wrong. Tomasz goes to sit somewhere else.",
+      ar: "يقول دينيس: لا شيء يدعو للقلق. يذهب توماش ليجلس في مكان آخر.",
+      pl: "Dennis mówi: nic się nie stało. Tomasz idzie usiąść gdzie indziej.",
+      tr: "Dennis der ki: bir şey yok. Tomasz başka bir yere oturmaya gider.",
+      uk: "Денніс каже: нічого страшного. Томаш іде сісти деінде.",
+    },
+    why: {
+      nl: "Eerst zeg je: stop. Daarna zeg je: laat maar. Dan denkt Dennis: het mag toch. Tomasz staat er weer alleen voor.",
+      en: "First you say: stop. Then you say: never mind. Then Dennis thinks: it is okay after all. Tomasz is alone again.",
+      ar: "أولًا تقول: توقّف. ثم تقول: لا بأس. عندها يظن دينيس: الأمر مسموح إذن. يبقى توماش وحيدًا مرة أخرى.",
+      pl: "Najpierw mówisz: stop. Potem mówisz: nieważne. Wtedy Dennis myśli: jednak wolno. Tomasz znów zostaje sam.",
+      tr: "Önce dur dersin. Sonra boş ver dersin. O zaman Dennis düşünür: demek ki olur. Tomasz yine yalnız kalır.",
+      uk: "Спочатку ти кажеш: стоп. Потім кажеш: забудь. Тоді Денніс думає: значить, можна. Томаш знову сам.",
+    },
+    tip: {
+      nl: "Lacht iemand je uit? Geef niet op. Zeg het nog een keer, rustig.",
+      en: "Does someone laugh at you? Do not give up. Say it again, calmly.",
+      ar: "هل يضحك عليك أحد؟ لا تستسلم. قلها مرة أخرى بهدوء.",
+      pl: "Ktoś się z ciebie śmieje? Nie poddawaj się. Powiedz to jeszcze raz, spokojnie.",
+      tr: "Biri sana mı gülüyor? Vazgeçme. Sakince bir kez daha söyle.",
+      uk: "Хтось із тебе сміється? Не здавайся. Скажи це ще раз, спокійно.",
+    },
+    quote: {
+      nl: "Voor Tomasz is het geen grapje. Kap er gewoon mee.",
+      en: "For Tomasz it's not a joke. Just stop it.",
+      ar: "بالنسبة لتوماش هذه ليست مزحة. توقّف عن ذلك فقط.",
+      pl: "Dla Tomasza to nie jest żart. Po prostu przestań.",
+      tr: "Tomasz için bu bir şaka değil. Bırak artık.",
+      uk: "Для Томаша це не жарт. Просто припини.",
+    },
+    q: {
+      nl: "Waarom is het moeilijk om het twee keer te zeggen?",
+      en: "Why is it hard to say it twice?",
+      ar: "لماذا من الصعب أن تقولها مرتين؟",
+      pl: "Dlaczego trudno powiedzieć to dwa razy?",
+      tr: "Bunu iki kez söylemek neden zor?",
+      uk: "Чому важко сказати це двічі?",
+    },
+  },
+  C2: {
+    mood: 'escalated',
+    moodLabel: BASE_OUTCOMES.C.moodLabel,
+    title: { nl: "Je scheldt toch", en: "You call him names after all", ar: "تشتمه في النهاية", pl: "Jednak go obrażasz", tr: "Sonunda hakaret edersin", uk: "Ти все-таки обзиваєш його" },
+    what: {
+      nl: "Dennis wordt boos. Er komt ruzie. Tomasz gaat weg.",
+      en: "Dennis gets angry. There is an argument. Tomasz leaves.",
+      ar: "يغضب دينيس. يحدث شجار. يغادر توماش.",
+      pl: "Dennis się złości. Jest kłótnia. Tomasz wychodzi.",
+      tr: "Dennis sinirlenir. Kavga çıkar. Tomasz gider.",
+      uk: "Денніс злиться. Починається сварка. Томаш іде.",
+    },
+    why: {
+      nl: "Eerst zei je het goed. Maar nu scheld je. Nu gaat het niet meer over Tomasz.",
+      en: "At first you said it well. But now you call names. Now it is no longer about Tomasz.",
+      ar: "في البداية قلتها بشكل جيد. لكنك الآن تشتم. الآن لم يعد الأمر عن توماش.",
+      pl: "Na początku powiedziałeś to dobrze. Ale teraz przeklinasz. Teraz nie chodzi już o Tomasza.",
+      tr: "Önce iyi söyledin. Ama şimdi hakaret ediyorsun. Artık konu Tomasz değil.",
+      uk: "Спочатку ти сказав це добре. Але тепер ти обзиваєшся. Тепер ідеться вже не про Томаша.",
+    },
+    tip: {
+      nl: "Word je boos? Adem rustig. Praat over de grap, niet over de persoon.",
+      en: "Are you getting angry? Breathe calmly. Talk about the joke, not about the person.",
+      ar: "هل بدأت تغضب؟ تنفّس بهدوء. تحدّث عن المزحة، لا عن الشخص.",
+      pl: "Złościsz się? Oddychaj spokojnie. Mów o żarcie, nie o osobie.",
+      tr: "Sinirleniyor musun? Sakince nefes al. Şaka hakkında konuş, kişi hakkında değil.",
+      uk: "Ти злишся? Дихай спокійно. Говори про жарт, а не про людину.",
+    },
+    quote: {
+      nl: "Voor Tomasz is het geen grapje. Kap er gewoon mee.",
+      en: "For Tomasz it's not a joke. Just stop it.",
+      ar: "بالنسبة لتوماش هذه ليست مزحة. توقّف عن ذلك فقط.",
+      pl: "Dla Tomasza to nie jest żart. Po prostu przestań.",
+      tr: "Tomasz için bu bir şaka değil. Bırak artık.",
+      uk: "Для Томаша це не жарт. Просто припини.",
+    },
+    q: {
+      nl: "Wat helpt jou om rustig te blijven?",
+      en: "What helps you stay calm?",
+      ar: "ما الذي يساعدك على البقاء هادئًا؟",
+      pl: "Co pomaga ci zachować spokój?",
+      tr: "Sakin kalmana ne yardım eder?",
+      uk: "Що допомагає тобі залишатися спокійним?",
+    },
+  },
 };
 
 // De transferkaart in elke tak.
-for (const k of ['A', 'B', 'C']) OUTCOMES[k].extra = [SELF_CARD];
+for (const k of ['A2', 'B', 'C', 'B2', 'C2']) OUTCOMES[k].extra = [SELF_CARD];

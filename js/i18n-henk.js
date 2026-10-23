@@ -32,15 +32,15 @@ export const UI = {
   },
   // Vertellersregels in tak A (geen stem, in de ondertitelbalk).
   nA1: {
-    nl: 'Henk komt naar beneden. Jij haalt de trap.',
-    en: 'Henk comes down. You get the ladder.',
-    ar: 'ينزل هنك. وأنت تُحضر السلّم.',
-    pl: 'Henk schodzi. Ty przynosisz drabinę.',
-    tr: 'Henk aşağı iniyor. Sen merdiveni getiriyorsun.',
-    uk: 'Генк злазить. Ти приносиш драбину.',
+    nl: 'Henk komt naar beneden. Jij haalt de rolsteiger.',
+    en: 'Henk comes down. You get the rolling ladder.',
+    ar: 'ينزل هنك. وأنت تُحضر السلّم المتحرّك.',
+    pl: 'Henk schodzi. Ty przynosisz drabinę na kółkach.',
+    tr: 'Henk aşağı iniyor. Sen tekerlekli merdiveni getiriyorsun.',
+    uk: 'Генк злазить. Ти приносиш драбину на колесах.',
   },
   nBrake: {
-    nl: 'Klik. De trap staat op de rem.',
+    nl: 'Klik. De rolsteiger staat op de rem.',
     en: 'Click. The ladder brake is on.',
     ar: 'طق. فرامل السلّم مشدودة.',
     pl: 'Klik. Drabina stoi na hamulcu.',
@@ -48,7 +48,7 @@ export const UI = {
     uk: 'Клац. Драбина на гальмі.',
   },
   nClimb: {
-    nl: 'Henk gaat de trap op. Hij houdt de leuning vast.',
+    nl: 'Henk gaat de rolsteiger op. Hij houdt de leuning vast.',
     en: 'Henk goes up the ladder. He holds the railing.',
     ar: 'يصعد هنك السلّم. يمسك الدرابزين.',
     pl: 'Henk wchodzi po drabinie. Trzyma się poręczy.',
@@ -199,6 +199,31 @@ export const LINES = {
       uk: 'Так, так. Уже злажу.',
     },
   },
+  // Volhouden: Henk na antwoord A (na a1) en na A2.
+  x1: {
+    who: 'henk',
+    est: 3.5,
+    text: {
+      nl: "Kom op, geef nou gewoon die doos aan. Dan zijn we zo klaar.",
+      en: "Come on, just hand me that box. Then we're done in no time.",
+      ar: "هيا، ناولني تلك العلبة فقط. وننتهي بسرعة.",
+      pl: "No dalej, po prostu podaj mi to pudło. Zaraz skończymy.",
+      tr: "Hadi, şu kutuyu ver işte. Hemen bitiririz.",
+      uk: "Та годі, просто подай мені ту коробку. І ми швидко закінчимо.",
+    },
+  },
+  h2: {
+    who: 'henk',
+    est: 3.4,
+    text: {
+      nl: "Pff. Nou, vooruit dan.",
+      en: "Pff. Well, all right then.",
+      ar: "بفف. حسنًا، ليكن.",
+      pl: "Pff. No dobra, niech będzie.",
+      tr: "Pff. Peki, tamam o zaman.",
+      uk: "Пфф. Ну гаразд.",
+    },
+  },
 };
 
 // De drie reacties van de speler.
@@ -227,6 +252,31 @@ export const CHOICES = {
     tr: 'Deli misin? Bu yasak! Seni şikâyet edeceğim.',
     uk: 'Ти з глузду з’їхав? Так не можна! Я на тебе поскаржуся.',
   },
+  // Tweede keuze, na A: Henk blijft op de stelling staan (x1).
+  A2: {
+    nl: "Nee Henk, zo help ik je niet. Ik haal de rolsteiger.",
+    en: "No, Henk, I won't help you like this. I'll get the rolling ladder.",
+    ar: "لا يا هنك، لن أساعدك هكذا. سأحضر السلّم المتحرّك.",
+    pl: "Nie, Henku, tak ci nie pomogę. Przyniosę drabinę na kółkach.",
+    tr: "Hayır Henk, sana böyle yardım etmem. Tekerlekli merdiveni getiriyorum.",
+    uk: "Ні, Генку, так я тобі не допомагатиму. Я принесу драбину на колесах.",
+  },
+  B2: {
+    nl: "Nou, vooruit dan. Geef maar.",
+    en: "Well, all right then. Hand it over.",
+    ar: "حسنًا، ليكن. ناولني إياها.",
+    pl: "No dobra, niech będzie. Dawaj.",
+    tr: "Peki, tamam o zaman. Ver bakalım.",
+    uk: "Ну гаразд. Давай.",
+  },
+  C2: {
+    nl: "Doe normaal! Ik ga het nu melden.",
+    en: "Come on, stop it! I'm reporting this now.",
+    ar: "تصرّف بشكل طبيعي! سأبلّغ عن هذا الآن.",
+    pl: "Opanuj się! Zgłaszam to teraz.",
+    tr: "Normal davran! Bunu şimdi bildireceğim.",
+    uk: "Схаменися! Я зараз про це повідомлю.",
+  },
 };
 
 // Op de keuzekaart staat bij A alleen de kern, met de andere twee delen als pictogram-chips (de
@@ -250,9 +300,9 @@ export const CHOICE_SHORT = {
 
 // Pictogrammen op de kaartjes van de nabespreking (naast de tekst).
 export const CARD_PICS = {
-  A: {
+  A2: {
     what: [
-      { icon: 'ladder', text: { nl: 'trap', en: 'ladder', ar: 'السلّم', pl: 'drabina', tr: 'merdiven', uk: 'драбина' } },
+      { icon: 'ladder', text: { nl: 'rolsteiger', en: 'rolling ladder', ar: 'السلّم المتحرّك', pl: 'drabina na kółkach', tr: 'tekerlekli merdiven', uk: 'драбина на колесах' } },
       { icon: 'brake', text: { nl: 'rem erop', en: 'brake on', ar: 'الفرامل', pl: 'hamulec', tr: 'fren', uk: 'гальмо' } },
     ],
   },
@@ -261,43 +311,45 @@ export const CARD_PICS = {
   },
 };
 
+CARD_PICS.C2 = CARD_PICS.C;
+
 // Nabespreking per keuze: korte kaarten (taalniveau A2), elk met een pictogram.
 export const OUTCOMES = {
-  A: {
+  A2: {
     mood: 'calm',
-    moodLabel: BASE_OUTCOMES.A.moodLabel,
-    title: { nl: 'Je zegt wat je ziet', en: 'You say what you see', ar: 'تقول ما تراه', pl: 'Mówisz, co widzisz', tr: 'Gördüğünü söylersin', uk: 'Ти кажеш, що бачиш' },
+    moodLabel: BASE_OUTCOMES.A2.moodLabel,
+    title: { nl: "Je blijft bij je nee", en: "You stick to your no", ar: "تتمسّك برفضك", pl: "Trzymasz się swojego „nie”", tr: "Hayırında ısrar edersin", uk: "Ти стоїш на своєму" },
     what: {
-      nl: 'Henk komt naar beneden. Jij haalt de trap en zet hem op de rem. Henk geeft de doos aan.',
-      en: 'Henk comes down. You get the ladder and put the brake on. Henk hands you the box.',
-      ar: 'ينزل هنك. تُحضر السلّم وتشغّل الفرامل. يناولك هنك الصندوق.',
-      pl: 'Henk schodzi na dół. Przynosisz drabinę i zaciągasz hamulec. Henk podaje ci karton.',
-      tr: 'Henk aşağı iner. Merdiveni getirir ve frenini kilitlersin. Henk kutuyu sana uzatır.',
-      uk: 'Генк злазить. Ти приносиш драбину і ставиш її на гальмо. Генк подає тобі коробку.',
+      nl: "Henk wil eerst niet luisteren. Jij zegt het nog een keer. Dan komt hij naar beneden. Jij haalt de rolsteiger.",
+      en: "At first Henk does not want to listen. You say it again. Then he comes down. You get the rolling ladder.",
+      ar: "في البداية لا يريد هنك أن يستمع. تقولها مرة أخرى. ثم ينزل. وأنت تحضر السلّم المتحرّك.",
+      pl: "Na początku Henk nie chce słuchać. Mówisz to jeszcze raz. Wtedy schodzi. Ty przynosisz drabinę na kółkach.",
+      tr: "Henk önce dinlemek istemez. Sen bunu bir kez daha söylersin. Sonra aşağı iner. Sen tekerlekli merdiveni getirirsin.",
+      uk: "Спочатку Генк не хоче слухати. Ти кажеш це ще раз. Тоді він злазить. Ти приносиш драбину на колесах.",
     },
     why: {
-      nl: 'Je zegt wat jij voelt: ik schrik. Je geeft een oplossing. Henk voelt zich niet aangevallen.',
-      en: "You say what you feel: it scares me. You offer a solution. Henk doesn't feel attacked.",
-      ar: 'تقول ما تشعر به: أنا أخاف. تقدّم حلًّا. لا يشعر هنك بأنه مُهاجَم.',
-      pl: 'Mówisz, co czujesz: boję się. Proponujesz rozwiązanie. Henk nie czuje się atakowany.',
-      tr: 'Ne hissettiğini söylersin: korkuyorum. Bir çözüm sunarsın. Henk saldırıya uğramış hissetmez.',
-      uk: 'Ти кажеш, що відчуваєш: мені страшно. Ти пропонуєш рішення. Генк не відчуває нападу.',
+      nl: "Je blijft rustig en vriendelijk. Je zegt twee keer hetzelfde. Henk merkt: jij meent het.",
+      en: "You stay calm and friendly. You say the same thing twice. Henk notices: you mean it.",
+      ar: "تبقى هادئًا ولطيفًا. تقول الشيء نفسه مرتين. يلاحظ هنك: أنت جادّ.",
+      pl: "Zachowujesz spokój i życzliwość. Mówisz dwa razy to samo. Henk widzi: mówisz serio.",
+      tr: "Sakin ve nazik kalırsın. Aynı şeyi iki kez söylersin. Henk fark eder: ciddisin.",
+      uk: "Ти залишаєшся спокійним і привітним. Ти двічі кажеш те саме. Генк бачить: ти кажеш серйозно.",
     },
     tip: {
-      nl: 'Zeg 3 dingen: kom naar beneden. Ik schrik. Ik haal de trap.',
-      en: "Say 3 things: come down. It scares me. I'll get the ladder.",
-      ar: 'قل 3 أشياء: انزل. أنا أخاف. سأحضر السلّم.',
-      pl: 'Powiedz 3 rzeczy: zejdź na dół. Boję się. Przyniosę drabinę.',
-      tr: 'Üç şey söyle: aşağı in. Korkuyorum. Merdiveni getiriyorum.',
-      uk: 'Скажи 3 речі: злізь униз. Мені страшно. Я принесу драбину.',
+      nl: "Blijf rustig. Zeg het nog een keer. Gebruik dezelfde woorden.",
+      en: "Stay calm. Say it again. Use the same words.",
+      ar: "ابقَ هادئًا. قلها مرة أخرى. استخدم الكلمات نفسها.",
+      pl: "Zachowaj spokój. Powiedz to jeszcze raz. Użyj tych samych słów.",
+      tr: "Sakin kal. Bir kez daha söyle. Aynı kelimeleri kullan.",
+      uk: "Залишайся спокійним. Скажи це ще раз. Використовуй ті самі слова.",
     },
     quote: {
-      nl: 'Henk, kom even naar beneden. Ik schrik. Ik haal de trap.',
-      en: "Henk, come down for a moment. It scares me. I'll get the ladder.",
-      ar: 'هنك، انزل قليلًا. أنا أخاف. سأحضر السلّم.',
-      pl: 'Henku, zejdź na chwilę. Boję się. Przyniosę drabinę.',
-      tr: 'Henk, bir aşağı in. Korkuyorum. Merdiveni getiriyorum.',
-      uk: 'Генку, злізь на хвилинку. Мені страшно. Я принесу драбину.',
+      nl: "Nee Henk, zo help ik je niet. Ik haal de rolsteiger.",
+      en: "No, Henk, I won't help you like this. I'll get the rolling ladder.",
+      ar: "لا يا هنك، لن أساعدك هكذا. سأحضر السلّم المتحرّك.",
+      pl: "Nie, Henku, tak ci nie pomogę. Przyniosę drabinę na kółkach.",
+      tr: "Hayır Henk, sana böyle yardım etmem. Tekerlekli merdiveni getiriyorum.",
+      uk: "Ні, Генку, так я тобі не допомагатиму. Я принесу драбину на колесах.",
     },
     q: {
       nl: 'Wat doe jij als een collega iets gevaarlijks doet?',
@@ -396,6 +448,96 @@ export const OUTCOMES = {
       pl: 'Kiedy zgłaszasz coś przełożonemu?',
       tr: 'Bir şeyi ne zaman yöneticine bildirirsin?',
       uk: 'Коли ти повідомляєш щось керівникові?',
+    },
+  },
+  B2: {
+    mood: 'tense',
+    moodLabel: BASE_OUTCOMES.B.moodLabel,
+    title: { nl: "Je geeft toe", en: "You give in", ar: "تستسلم", pl: "Ustępujesz", tr: "Pes edersin", uk: "Ти поступаєшся" },
+    what: {
+      nl: "Henk reikt verder en valt bijna. De doos valt naast jou.",
+      en: "Henk reaches further and almost falls. The box falls next to you.",
+      ar: "يمدّ هنك يده أكثر ويكاد يسقط. تسقط العلبة بجانبك.",
+      pl: "Henk sięga dalej i prawie spada. Pudło spada obok ciebie.",
+      tr: "Henk daha da uzanır ve neredeyse düşer. Kutu yanına düşer.",
+      uk: "Генк тягнеться далі й ледь не падає. Коробка падає поруч із тобою.",
+    },
+    why: {
+      nl: "Eerst zei je: nee. Toen gaf je toch toe. Nu sta jij ook onder de stelling.",
+      en: "First you said: no. Then you gave in after all. Now you are under the rack too.",
+      ar: "أولًا قلت: لا. ثم استسلمت في النهاية. الآن أنت أيضًا تحت الرف.",
+      pl: "Najpierw powiedziałeś: nie. Potem jednak ustąpiłeś. Teraz ty też stoisz pod regałem.",
+      tr: "Önce hayır dedin. Sonra yine de pes ettin. Şimdi sen de rafın altındasın.",
+      uk: "Спочатку ти сказав: ні. Потім усе ж поступився. Тепер ти теж стоїш під стелажем.",
+    },
+    tip: {
+      nl: "Zegt iemand: kom op? Geef niet toe. Zeg het nog een keer, rustig.",
+      en: "Someone says: come on? Do not give in. Say it again, calmly.",
+      ar: "يقول لك أحد: هيا؟ لا تستسلم. قلها مرة أخرى بهدوء.",
+      pl: "Ktoś mówi: no dalej? Nie ustępuj. Powiedz to jeszcze raz, spokojnie.",
+      tr: "Biri hadi mi diyor? Pes etme. Sakince bir kez daha söyle.",
+      uk: "Хтось каже: та годі? Не поступайся. Скажи це ще раз, спокійно.",
+    },
+    quote: {
+      nl: "Nee Henk, zo help ik je niet. Ik haal de rolsteiger.",
+      en: "No, Henk, I won't help you like this. I'll get the rolling ladder.",
+      ar: "لا يا هنك، لن أساعدك هكذا. سأحضر السلّم المتحرّك.",
+      pl: "Nie, Henku, tak ci nie pomogę. Przyniosę drabinę na kółkach.",
+      tr: "Hayır Henk, sana böyle yardım etmem. Tekerlekli merdiveni getiriyorum.",
+      uk: "Ні, Генку, так я тобі не допомагатиму. Я принесу драбину на колесах.",
+    },
+    q: {
+      nl: "Waarom is het lastig om twee keer nee te zeggen?",
+      en: "Why is it hard to say no twice?",
+      ar: "لماذا من الصعب أن تقول لا مرتين؟",
+      pl: "Dlaczego trudno powiedzieć nie dwa razy?",
+      tr: "İki kez hayır demek neden zor?",
+      uk: "Чому важко сказати ні двічі?",
+    },
+  },
+  C2: {
+    mood: 'escalated',
+    moodLabel: BASE_OUTCOMES.C.moodLabel,
+    title: { nl: "Je dreigt toch", en: "You threaten after all", ar: "تهدّده في النهاية", pl: "Jednak grozisz", tr: "Sonunda tehdit edersin", uk: "Ти все-таки погрожуєш" },
+    what: {
+      nl: "Henk wordt boos en blijft staan. Sandra moet helpen.",
+      en: "Henk gets angry and stays up there. Sandra has to help.",
+      ar: "يغضب هنك ويبقى واقفًا. على ساندرا أن تساعد.",
+      pl: "Henk się złości i zostaje na górze. Sandra musi pomóc.",
+      tr: "Henk sinirlenir ve yukarıda kalır. Sandra yardım etmek zorunda kalır.",
+      uk: "Генк злиться й лишається нагорі. Сандрі доводиться допомагати.",
+    },
+    why: {
+      nl: "Eerst zei je het rustig. Toen werd je boos en dreigde je. Melden is goed. Maar dreigen maakt Henk boos.",
+      en: "First you said it calmly. Then you got angry and threatened him. Reporting is good. But threats make Henk angry.",
+      ar: "في البداية قلتها بهدوء. ثم غضبت وهدّدته. التبليغ جيد. لكن التهديد يُغضب هنك.",
+      pl: "Najpierw powiedziałeś to spokojnie. Potem się zezłościłeś i zagroziłeś. Zgłaszanie jest dobre. Ale groźby złoszczą Henka.",
+      tr: "Önce sakince söyledin. Sonra sinirlenip tehdit ettin. Bildirmek iyidir. Ama tehdit Henk’i kızdırır.",
+      uk: "Спочатку ти сказав це спокійно. Потім розізлився й погрожував. Повідомити — добре. Але погрози злять Генка.",
+    },
+    tip: {
+      nl: "Word je boos? Adem rustig. Praat over het gevaar, niet over de persoon.",
+      en: "Are you getting angry? Breathe calmly. Talk about the danger, not about the person.",
+      ar: "هل بدأت تغضب؟ تنفّس بهدوء. تحدّث عن الخطر، لا عن الشخص.",
+      pl: "Złościsz się? Oddychaj spokojnie. Mów o zagrożeniu, nie o osobie.",
+      tr: "Sinirleniyor musun? Sakince nefes al. Tehlike hakkında konuş, kişi hakkında değil.",
+      uk: "Ти злишся? Дихай спокійно. Говори про небезпеку, а не про людину.",
+    },
+    quote: {
+      nl: "Nee Henk, zo help ik je niet. Ik haal de rolsteiger.",
+      en: "No, Henk, I won't help you like this. I'll get the rolling ladder.",
+      ar: "لا يا هنك، لن أساعدك هكذا. سأحضر السلّم المتحرّك.",
+      pl: "Nie, Henku, tak ci nie pomogę. Przyniosę drabinę na kółkach.",
+      tr: "Hayır Henk, sana böyle yardım etmem. Tekerlekli merdiveni getiriyorum.",
+      uk: "Ні, Генку, так я тобі не допомагатиму. Я принесу драбину на колесах.",
+    },
+    q: {
+      nl: "Wanneer meld je iets bij je leidinggevende?",
+      en: "When do you report something to your manager?",
+      ar: "متى تبلّغ مديرك عن شيء ما؟",
+      pl: "Kiedy zgłaszasz coś przełożonemu?",
+      tr: "Bir şeyi ne zaman yöneticine bildirirsin?",
+      uk: "Коли ти повідомляєш щось керівникові?",
     },
   },
 };

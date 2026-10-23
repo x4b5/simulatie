@@ -3,8 +3,8 @@
 
 js/sim.js leest die tabel en js/audio.js past de gain per regel toe (de mp3's zelf blijven
 ongewijzigd, ook de lipsync-metingen). Regels:
-- de speler (pA/pB/pC) gaat precies naar -20 LUFS: de drie antwoorden klinken even luid, zodat
-  het volume niet verraadt welk antwoord 'goed' is;
+- de speler (pA/pB/pC en bij de tweede keuze pA2/pB2/pC2) gaat precies naar -20 LUFS: de drie
+  antwoorden klinken even luid, zodat het volume niet verraadt welk antwoord 'goed' is;
 - andere personages gaan naar -18 LUFS, maar houden 1/3 van hun afwijking: fluisteren blijft
   zachter dan schreeuwen, alleen niet meer 15-18 LU maar hooguit ~6 LU.
 - de piek na de gain blijft onder -1 dBFS (de gain wordt zo nodig kleiner gemaakt).
@@ -28,7 +28,7 @@ def main():
         for f in sorted(glob.glob(os.path.join(d, '*.mp3'))):
             vid = os.path.splitext(os.path.basename(f))[0]
             lufs, peak = measure(f)
-            if vid in ('pA', 'pB', 'pC'):
+            if re.fullmatch(r'p[ABC]2?', vid):
                 gdb = -20.0 - lufs
             else:
                 gdb = (-18.0 - lufs) * 2 / 3
@@ -37,9 +37,10 @@ def main():
             table[vid] = {'lufs': lufs, 'peak': peak, 'db': round(gdb, 2), 'gain': round(10 ** (gdb / 20), 3)}
             print(f'{f:28s} {lufs:6.1f} LUFS  piek {peak:6.1f} dB  -> {gdb:+5.1f} dB  ({lufs + gdb:6.1f} LUFS)')
         # Controle: de drie antwoorden van de speler mogen na correctie hooguit 3 LU verschillen.
-        res = [table[k]['lufs'] + table[k]['db'] for k in ('pA', 'pB', 'pC') if k in table]
-        if res and max(res) - min(res) > 3:
-            print(f'LET OP: {d}: antwoorden pA/pB/pC verschillen {max(res) - min(res):.1f} LU (> 3)')
+        for keys in (('pA', 'pB', 'pC'), ('pA2', 'pB2', 'pC2')):
+            res = [table[k]['lufs'] + table[k]['db'] for k in keys if k in table]
+            if res and max(res) - min(res) > 3:
+                print(f'LET OP: {d}: antwoorden {"/".join(keys)} verschillen {max(res) - min(res):.1f} LU (> 3)')
         with open(os.path.join(d, 'gain.json'), 'w') as fh:
             json.dump({k: v['gain'] for k, v in table.items()}, fh, indent=1)
 

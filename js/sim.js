@@ -66,6 +66,7 @@ export const S = {
   phase: 'loading', // loading | title | intro | choice | branch | reflect
   lang: 'nl',
   tried: new Set(),
+  stage: 1, // 1 = eerste keuze, 2 = tweede keuze ('Volhouden', na antwoord A)
   sub: null, // { who, key | choice }
   outcome: null,
   worldScale: 1,
@@ -548,22 +549,42 @@ export function setPhase(p) {
   $('#skip').hidden = p !== 'intro';
 }
 
-export function goChoice() {
+// Twee keuzemomenten. Keuze 1: A, B, C. Na A verzet de ander zich en volgt keuze 2 (A2, B2, C2):
+// volhouden, opgeven of alsnog boos worden. Op het scherm heten ze gewoon weer A, B en C.
+const STAGE_KEYS = { 1: ['A', 'B', 'C'], 2: ['A2', 'B2', 'C2'] };
+const hasStage2 = () => !!T.CHOICES.A2;
+const stageOf = (key) => (key && key.endsWith('2') ? 2 : 1);
+// Alle afloopkaarten: B en C, en na A de drie uitkomsten van keuze 2.
+const allOutcomes = () => (hasStage2() ? ['B', 'C', 'A2', 'B2', 'C2'] : ['A', 'B', 'C']);
+const allSeen = () => allOutcomes().every((k) => S.tried.has(k));
+// Is een optie van keuze 1 'al gezien'? A pas als je ook alle drie de vervolgen hebt gezien.
+function triedOpt(key) {
+  if (key === 'A' && hasStage2()) return STAGE_KEYS[2].every((k) => S.tried.has(k));
+  return S.tried.has(key);
+}
+
+export function goChoice(stage = 1) {
+  S.stage = stage;
   setPhase('choice');
   hideSub();
-  scn.onChoice();
+  scn.onChoice(stage);
   renderChoice();
 }
 
 function pick(key) {
-  if (S.phase !== 'choice') return;
+  if (S.phase !== 'choice' || !STAGE_KEYS[S.stage].includes(key)) return;
   S.tried.add(key);
   hideChoice();
   run(async (id) => {
     setPhase('branch');
-    await scn.branch(id, key);
+    // Het scenario geeft 'choice2' terug als er na dit antwoord een tweede keuze komt.
+    const next = await scn.branch(id, key);
     guard(id);
     if (S.sub?.who === 'note') hideSub();
+    if (next === 'choice2') {
+      goChoice(2);
+      return;
+    }
     showReflection(key);
   });
 }
@@ -572,17 +593,37 @@ choiceEl = $('#choice');
 function renderChoice() {
   if (S.phase !== 'choice') return;
   const { UI, CHOICES } = T;
-  const [title, titleTr] = pair(UI.prompt, S.lang);
+  const stage = S.stage || 1;
+  const [title, titleTr] = pair(stage === 2 && UI.prompt2 ? UI.prompt2 : UI.prompt, S.lang);
+  choiceEl.dataset.stage = stage;
   const [sub, subTr] = pair(UI.pickOne, S.lang);
   choiceEl.querySelector('.c-title').textContent = title;
   setTr(choiceEl.querySelector('.c-title-tr'), titleTr);
   choiceEl.querySelector('.c-sub').textContent = sub;
   setTr(choiceEl.querySelector('.c-sub-tr'), subTr);
+  // Tweede keuze: wat de ander net zei (x1) staat erboven, met een knop om het nog eens te horen.
+  choiceEl.querySelector('.c-quote')?.remove();
+  const x1 = stage === 2 ? T.LINES.x1 : null;
+  if (x1) {
+    const q = document.createElement('button');
+    q.type = 'button';
+    q.className = 'c-quote';
+    const [qNl] = pair(x1.text, S.lang);
+    const [whoNl] = pair(UI[x1.who] || { nl: '' }, S.lang);
+    q.innerHTML = `<span class="ic">${ICONS.speaker}</span><span class="q-txt"><b></b> <span class="q-nl"></span></span>`;
+    q.querySelector('b').textContent = whoNl ? `${whoNl.split(',')[0]}:` : '';
+    q.querySelector('.q-nl').textContent = `“${qNl}”`;
+    q.setAttribute('aria-label', `${pair(UI.listen, S.lang)[0]}: ${qNl}`);
+    q.addEventListener('click', () => previewLine('x1'));
+    choiceEl.querySelector('.c-head').after(q);
+  }
   const list = choiceEl.querySelector('.c-list');
   list.replaceChildren();
   const items = [];
   const listenNl = pair(UI.listen, S.lang)[0];
-  for (const key of ['A', 'B', 'C']) {
+  for (const key of STAGE_KEYS[stage]) {
+    const letter = key[0];
+    const tried = triedOpt(key);
     // Kort in het Nederlands (met pictogram-chips), de vertaling wel van de hele zin.
     const short = T.CHOICE_SHORT?.[key];
     const nl = pair(short ? short.text : CHOICES[key], S.lang)[0];
@@ -593,11 +634,11 @@ function renderChoice() {
     b.className = 'opt';
     b.type = 'button';
     b.id = `opt-${key}`;
-    b.innerHTML = `<span class="opt-pic" aria-hidden="true"><span class="opt-icon ic">${ICONS[scn.choiceIcon[key]]}</span><span class="opt-key">${key}</span></span><span class="opt-body"><span class="opt-nl"></span><span class="opt-tr"></span></span>`;
+    b.innerHTML = `<span class="opt-pic" aria-hidden="true"><span class="opt-icon ic">${ICONS[scn.choiceIcon[key]]}</span><span class="opt-key">${letter}</span></span><span class="opt-body"><span class="opt-nl"></span><span class="opt-tr"></span></span>`;
     b.querySelector('.opt-nl').textContent = nl;
     setTr(b.querySelector('.opt-tr'), other);
     if (short?.chips) b.querySelector('.opt-body').appendChild(picChips(short.chips));
-    if (S.tried.has(key)) {
+    if (tried) {
       const t = document.createElement('span');
       t.className = 'opt-tried';
       t.innerHTML = `<span class="ic">${ICONS.check}</span>`;
@@ -620,7 +661,7 @@ function renderChoice() {
     wrap.append(b, l);
     list.appendChild(wrap);
     const [fullNl, fullTr] = pair(CHOICES[key], S.lang); // VR: daar is ruimte voor de hele zin
-    items.push({ letter: key, nl: fullNl, other: fullTr, tried: S.tried.has(key), onSelect: () => pick(key) });
+    items.push({ letter, nl: fullNl, other: fullTr, tried, onSelect: () => pick(key) });
   }
   choiceEl.hidden = false;
   vrui.showChoices(title, sub, pair(UI.vrHint, S.lang)[0], items, langDir(S.lang), pair(UI.tried, S.lang)[0]);
@@ -663,7 +704,36 @@ async function previewChoice(key) {
 function stopPreview() {
   if (preview) preview.stop();
   preview = null;
-  for (const b of choiceEl.querySelectorAll('.opt-listen.playing')) b.classList.remove('playing');
+  if (previewWho) previewWho.stopSpeaking();
+  previewWho = null;
+  for (const b of choiceEl.querySelectorAll('.opt-listen.playing, .c-quote.playing')) b.classList.remove('playing');
+}
+// Tweede keuzescherm: de tegenwerping (x1) nog eens horen, met lipsync, zodat je na een lange
+// nabespreking weet waar je op antwoordt.
+let previewWho = null;
+async function previewLine(key) {
+  await ensureAudio();
+  stopPreview();
+  const line = T.LINES[key];
+  const person = line && scn.person(line.who);
+  const v = person && audio.ready && person.panner ? audio.voice(key, person.panner) : null;
+  if (!v) return;
+  preview = v;
+  previewWho = person;
+  const live = audio.ctx.state === 'running' && !S.muted;
+  const t0 = simT;
+  const clock = live ? () => audio.ctx.currentTime - v.startTime : () => simT - t0;
+  if (LIPSYNC[key]) person.speak(LIPSYNC[key], clock, scn.lineEmo?.[key], live ? () => audio.level(v.analyser) : null);
+  const btn = choiceEl.querySelector('.c-quote');
+  btn?.classList.add('playing');
+  v.ended.then(() => {
+    btn?.classList.remove('playing');
+    if (preview === v) {
+      preview = null;
+      if (previewWho === person) person.stopSpeaking();
+      previewWho = null;
+    }
+  });
 }
 
 // ------------------------------------------------------------------
@@ -783,7 +853,7 @@ function readStory(btn) {
   readAloud(withTr(keys.map((k) => T.UI[k])), btn);
 }
 function readPrompt(btn) {
-  readAloud(withTr([T.UI.prompt, T.UI.pickOne]), btn);
+  readAloud(withTr([S.stage === 2 && T.UI.prompt2 ? T.UI.prompt2 : T.UI.prompt, T.UI.pickOne]), btn);
 }
 function readCard(btn, auto = false) {
   if (S.phase !== 'reflect') return;
@@ -798,7 +868,7 @@ function readCard(btn, auto = false) {
   const c = cards[Math.min(S.card || 0, cards.length - 1)];
   const entries = [c.head, c.body, ...(c.pics || []).map((p) => p.text)];
   if (c.quote) entries.push(T.UI.sayIt, c.quote);
-  if (c.last && S.tried.size === 3) entries.push(T.UI.allTried);
+  if (c.last && allSeen()) entries.push(T.UI.allTried);
   readAloud(withTr(entries), btn);
 }
 function setupReadButtons() {
@@ -883,7 +953,7 @@ function renderReflection() {
     q('.r-quote-nl').textContent = qNl;
     setTr(q('.r-quote-tr'), qTr);
   }
-  const all = !!c.last && S.tried.size === 3;
+  const all = !!c.last && allSeen();
   q('.r-all').hidden = !all;
   if (all) {
     const [nl, other] = pair(UI.allTried, S.lang);
@@ -905,6 +975,17 @@ function renderReflection() {
   q('.r-actions').hidden = !c.last;
   $('#btn-retry .b-nl').textContent = pair(UI.retry, S.lang)[0];
   setTr($('#btn-retry .b-tr'), pair(UI.retry, S.lang)[1]);
+  // Na de tweede keuze: 'Kies een ander antwoord' gaat terug naar keuze 2; deze knop naar keuze 1.
+  const two = stageOf(key) === 2 && !!UI.retryStart;
+  const r1 = $('#btn-retry1');
+  if (r1) {
+    r1.hidden = !two;
+    q('.r-actions').classList.toggle('three', two);
+    if (two) {
+      r1.querySelector('.b-nl').textContent = pair(UI.retryStart, S.lang)[0];
+      setTr(r1.querySelector('.b-tr'), pair(UI.retryStart, S.lang)[1]);
+    }
+  }
   $('#btn-restart .b-nl').textContent = pair(UI.restart, S.lang)[0];
   setTr($('#btn-restart .b-tr'), pair(UI.restart, S.lang)[1]);
   reflEl.hidden = false;
@@ -941,6 +1022,7 @@ function renderReflection() {
   const buttons = c.last
     ? [
         { label: pair(UI.retry, S.lang)[0], primary: true, onSelect: retry },
+        ...(two ? [{ label: pair(UI.retryStart, S.lang)[0], onSelect: retryStart }] : []),
         { label: pair(UI.restart, S.lang)[0], onSelect: restart },
       ]
     : [{ label: `${pair(UI.next, S.lang)[0]}  →`, primary: true, onSelect: () => stepCard(1) }];
@@ -1023,13 +1105,13 @@ async function veil(on, msg = null) {
 }
 let veilAnim = null;
 
-function rewindToChoice(holdMsg) {
+function rewindToChoice(holdMsg, stage = 1) {
   run(async (id) => {
     await veil(true, holdMsg);
     guard(id);
     stopVoice();
     hideSub();
-    scn.reset('choice');
+    scn.reset(stage === 2 ? 'choice2' : 'choice');
     setPhase('branch');
     snapLook();
     await waitReal(holdMsg ? 0.6 : 0.1);
@@ -1037,17 +1119,25 @@ function rewindToChoice(holdMsg) {
     veil(false);
     await wait(0.3);
     guard(id);
-    goChoice();
+    goChoice(stage);
   });
 }
 
+// Kies een ander antwoord: terug naar de keuze waar deze afloop bij hoort (na keuze 2: keuze 2).
 function retry() {
+  const stage = stageOf(S.outcome);
   hideReflection();
-  rewindToChoice(T.UI.rewind);
+  rewindToChoice(T.UI.rewind, stage);
+}
+// Terug naar de eerste keuze: na keuze 2 terug naar keuze 1.
+function retryStart() {
+  hideReflection();
+  rewindToChoice(T.UI.rewindStart || T.UI.rewind, 1);
 }
 
 function restart() {
   tts.auto = false;
+  S.stage = 1;
   hideReflection();
   hideChoice();
   run(async (id) => {
@@ -1193,6 +1283,17 @@ function bindUI() {
   $('#btn-start').addEventListener('click', startDesktop);
   $('#btn-vr').addEventListener('click', startVR);
   $('#btn-retry').addEventListener('click', retry);
+  // Knop 'Terug naar de eerste keuze' (alleen na de tweede keuze in beeld).
+  if (!$('#btn-retry1')) {
+    const r1 = document.createElement('button');
+    r1.id = 'btn-retry1';
+    r1.className = 'btn ghost';
+    r1.type = 'button';
+    r1.hidden = true;
+    r1.innerHTML = `<span class="ic">${ICONS.toStart}</span><span><span class="b-nl"></span><span class="b-tr"></span></span>`;
+    $('#btn-retry').after(r1);
+  }
+  $('#btn-retry1').addEventListener('click', retryStart);
   $('#btn-restart').addEventListener('click', restart);
   $('#r-next').addEventListener('click', () => stepCard(1));
   $('#r-back').addEventListener('click', () => stepCard(-1));
@@ -1218,8 +1319,8 @@ function bindUI() {
       return;
     }
     if (S.phase !== 'choice') return;
-    const k = { 1: 'A', 2: 'B', 3: 'C', a: 'A', b: 'B', c: 'C' }[e.key.toLowerCase()];
-    if (k) pick(k);
+    const i = { 1: 0, 2: 1, 3: 2, a: 0, b: 1, c: 2 }[e.key.toLowerCase()];
+    if (i !== undefined) pick(STAGE_KEYS[S.stage || 1][i]);
   });
 
   // Rondkijken door te slepen (muis, touch, pen).
@@ -1474,7 +1575,8 @@ function lightenShadows() {
 // scenario: {
 //   texts: { UI, LINES, CHOICES, OUTCOMES }, choiceIcon, subColors, lineEmo,
 //   lipsync: url, audioDir: map met stemopnames, eye: ooghoogte (m), seatedVR: speler zit,
-//   person(who), build(), reset(state), intro(id), onChoice(), branch(id, key),
+//   person(who), build(), reset(state: 'start' | 'choice' | 'choice2'), intro(id),
+//   onChoice(stage), branch(id, key): geeft 'choice2' terug als er een tweede keuze volgt,
 //   update(dt, wdt), lateUpdate(dt, wdt): na de camera (dingen die aan de speler vastzitten),
 //   setupAudio(), updateAudio(dt, camPos), debug: extra testhaken }
 export async function start(scenario) {
@@ -1483,7 +1585,7 @@ export async function start(scenario) {
   eye = scenario.eye ?? 1.65;
   camera.position.set(0, eye, 0);
   window.__sim = Object.defineProperties(
-    { S, pick, skipIntro, restart, retry, stepCard, previewChoice, rig, camera, look, vrui, showReflection, readCard, stopReading },
+    { S, pick, goChoice, skipIntro, restart, retry, retryStart, stepCard, previewChoice, rig, camera, look, vrui, showReflection, readCard, stopReading },
     { simT: { get: () => simT }, ...Object.getOwnPropertyDescriptors(scenario.debug || {}) },
   );
 
@@ -1516,7 +1618,7 @@ export async function start(scenario) {
     .then((r) => (r.ok ? r.json() : null))
     .then((g) => (audio.gains = g || {}))
     .catch(() => (audio.gains = {}));
-  const voiceIds = [...Object.keys(T.LINES), 'pA', 'pB', 'pC'];
+  const voiceIds = [...Object.keys(T.LINES), ...Object.keys(T.CHOICES).map((k) => `p${k}`)];
   audioPrefetch = Promise.all([gains, ...voiceIds.map((id) => audio.prefetch(id, `${scenario.audioDir}${id}.mp3`))]);
   await audioPrefetch;
   const btn = $('#btn-start');

@@ -2004,6 +2004,8 @@ export class Human {
         bone.updateMatrixWorld(true);
         head.getWorldPosition(_v);
         const desired = _v2.copy(t).sub(_v).normalize();
+        // Nooit een ongeldige kijkrichting doorgeven (een NaN blijft anders voor altijd in het bot).
+        if (!Number.isFinite(desired.x + desired.y + desired.z)) continue;
         head.getWorldQuaternion(_q);
         const cur = _v3.copy(fwd).applyQuaternion(_q).normalize();
         // Bij een grote hoek draait het hoofd verder mee, zodat de ogen binnen hun grens blijven.
@@ -2011,7 +2013,7 @@ export class Human {
         if (this.upright) {
           // Zoals een echt hoofd: eerst draaien om de verticale as, dan knikken; niet scheef kantelen.
           const rawYaw = shortAngle(Math.atan2(desired.x, desired.z) - Math.atan2(cur.x, cur.z));
-          const rawPitch = Math.asin(desired.y) - Math.asin(THREE.MathUtils.clamp(cur.y, -1, 1));
+          const rawPitch = Math.asin(THREE.MathUtils.clamp(desired.y, -1, 1)) - Math.asin(THREE.MathUtils.clamp(cur.y, -1, 1));
           const dYaw = THREE.MathUtils.clamp(rawYaw, -maxAng, maxAng) * share(rawYaw, EYE_YAW - 0.05) * this.lookW;
           const dPitch = THREE.MathUtils.clamp(rawPitch, -maxAng * 0.7, maxAng * 0.7) * share(rawPitch, (rawPitch > 0 ? EYE_UP : EYE_DOWN) - 0.03) * this.lookW;
           const side = _v.set(cur.x, 0, cur.z).normalize().cross(UP);

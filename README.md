@@ -27,6 +27,18 @@ de speler uit drie reacties en ziet hij wat er daarna gebeurt.
 - **Voor laaggeletterden:** korte zinnen (niveau A2), bij elke stap een pictogram,
   ondertitels met één zin tegelijk, en elk antwoord kun je eerst beluisteren
   (knop *Luister*). Na de keuze hoor je jezelf het antwoord hardop zeggen.
+- **Voorlezen:** op het startscherm, bij de keuzevraag en op elk kaartje van de nabespreking staat
+  een knop *Luister*. Die leest de tekst voor met de spraak van de browser (Web Speech API): eerst
+  het Nederlands, daarna de vertaling als de browser een stem voor die taal heeft. Wie één kaartje
+  laat voorlezen, krijgt de volgende kaartjes vanzelf voorgelezen; stop je het voorlezen zelf (of
+  begin je opnieuw), dan houdt dat op. Heeft de browser geen Nederlandse stem maar wel een stem voor
+  de vertaaltaal, dan wordt alleen de vertaling voorgelezen; zonder enige stem zijn de knoppen er niet.
+- **Even luid:** de stemopnames worden bij het afspelen gelijkgetrokken (`gain.json` per map, gemaakt
+  met `python3 tools/loudness.py`): de drie antwoorden van de speler klinken precies even luid, zodat
+  het volume niet verraadt welk antwoord 'goed' is; schreeuwen blijft luider dan fluisteren, maar
+  hooguit ~6 LU in plaats van 15-18 LU. Draai het script opnieuw na een nieuwe opname.
+- **Pictogrammen bij de antwoorden** beschrijven wát je zegt (gevaar, haast, stop …), niet of het
+  goed is: geen hartje bij het 'goede' en geen boos gezicht bij het 'foute' antwoord.
 - **Apparaten:** laptop/pc, tablet/telefoon (slepen om rond te kijken), digibord
   (grote knoppen, toetsen 1-2-3) en VR-bril via WebXR.
 
@@ -49,6 +61,12 @@ Nabespreking ── 4 kaartjes, één tegelijk: wat gebeurt er (oog), waarom (la
                  tip + "zo kun je het zeggen" (ballon), denkvraag (vraagteken). Geen punten.
                  → "Kies een ander antwoord" of "Opnieuw beginnen"
 ```
+
+Bij het keuzemoment richt de blik zich zo dat het gezicht (in de kantine: Tomasz, Dennis en
+Marco) boven het keuzepaneel in beeld blijft; op een staand scherm wordt de beeldhoek tijdelijk
+groter. Bij *Kies een ander antwoord*, *Opnieuw* en *Naar de keuze* gaat het beeld kort naar zwart
+(ook in VR) met de melding dat je terug bent bij het moment van de keuze. In VR beweegt het
+beeld niet bij terugdeinzen en krijgt gedwongen lopen een tunnelvignet.
 
 Er is bewust geen goed/fout-score. Na het zien van alle drie de reacties
 stelt de oefening voor om ze in de groep te bespreken.
@@ -110,7 +128,8 @@ Keuze (tijd staat stil, alle drie kijken naar de speler)
    └─ C "Hou je kop, man. Jij bent zelf een grap!"         → Dennis staat op, ruzie, de kantine
                                                             kijkt om, Tomasz loopt weg
    ▼
-Nabespreking ── dezelfde 4 kaartjes als in Bijna geraakt. Geen punten.
+Nabespreking ── dezelfde 4 kaartjes als in Bijna geraakt, plus een vijfde vóór de denkvraag:
+                 "En als het over jou gaat?" (als jij zelf Tomasz bent). Geen punten.
 ```
 
 - **Personages:** Dennis, Tomasz en Marco uit Bijna geraakt. Het is lunchpauze: niemand draagt
@@ -118,7 +137,8 @@ Nabespreking ── dezelfde 4 kaartjes als in Bijna geraakt. Geen punten.
   lichaamstexturen (`models/tex/m108k_*`, `m107k_*`, `f101k_*`: overall in plaats van hesje, blote
   handen in de huidskleur van het gezicht); `Human.load` kiest die met `bodyCode` en verbergt losse
   onderdelen (portofoon, sluitlusje) met `hideUV`. Bijna geraakt gebruikt de originele texturen.
-  Op de achtergrond zitten collega's aan andere tafels en haalt teamleider Sandra koffie;
+  Tomasz draagt een donkergroen werkjack (`tintClothes` in `js/human.js`), zodat hij niet opgaat
+  tussen de collega's in het blauw. Op de achtergrond zitten collega's aan andere tafels en haalt teamleider Sandra koffie;
   in de ruzie kijken ze allemaal om.
 - **Zitten aan tafel:** motion capture van mensen die aan een tafel zitten (onderarmen op het
   blad), op stoelen en een tafel met de maten uit die opnames (zitting 46 cm, blad 75 cm).
@@ -143,9 +163,13 @@ Intro ── de speler loopt met zijn scanner door orderpickgang 12. Een metalen
    ▼
 Keuze (tijd staat stil, Henk kijkt naar de speler)
    ├─ A "Henk, kom even naar beneden? Ik schrik als ik je daar zie staan. Ik haal de trap wel."
+   │       (op de keuzekaart alleen "Henk, kom even naar beneden?" met twee pictogram-chips
+   │       'ik schrik' en 'ik haal de trap', zodat de lengte het antwoord niet verraadt)
    │       → Henk moppert ("Ik doe dit al vijfentwintig jaar") maar klimt voorzichtig naar beneden.
-   │         De speler duwt de rolsteiger naar de stelling, Henk loopt ernaast mee terug. "Je hebt gelijk. Vorig jaar is Ahmed
-   │         zo gevallen." Henk klimt de steiger op en pakt de doos veilig.
+   │         De speler loopt meteen naar de rolsteiger en duwt hem naar de stelling, en zet hem op
+   │         de rem (klik, rood pedaal). "Je hebt gelijk. Vorig jaar is Ahmed zo gevallen." Henk
+   │         klimt de steiger op, pakt de doos en geeft hem laag aan; de speler staat naast de
+   │         treden (niet eronder) en neemt hem over. Henk houdt met twee handen de leuning vast.
    ├─ B "Ja hoor, geef maar."
    │       → de speler stapt onder de stelling, Henk reikt verder, de doos schuift weg en valt,
    │         Henks voet glijdt van de ligger (hartslag). "Haha… dat ging net goed." Marco komt
@@ -157,6 +181,13 @@ Keuze (tijd staat stil, Henk kijkt naar de speler)
    ▼
 Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten.
 ```
+
+- **Woorden en beeld:** de speler zegt "trap"; op de rolsteiger staat daarom een bordje TRAP.
+  De tip van A herhaalt precies de drie stukjes van de gesproken zin (kom naar beneden, ik schrik,
+  ik haal de trap). Kaart C heet "Je dreigt" en zegt erbij dat melden goed is, maar dat je het
+  eerst rustig tegen Henk zegt (pictogram klembord).
+- **Geen lange stiltes:** waar niemand praat (A: naar de steiger lopen, de rem) staat een korte
+  vertellersregel zonder stem in de ondertitelbalk (`narrate` in `js/sim.js`).
 
 - **Plek:** een orderpickgang voorin dezelfde hal als Bijna geraakt (`js/racking.js`): lage
   stellingen voor dozen en bakken met liggers op 0,5 – 0,95 – 2,15 – 3,3 m, draadroosters,
@@ -208,6 +239,7 @@ Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten
 | Teksten, vertalingen en nabespreking (Hoog en droog) | `js/i18n-henk.js` |
 | Namen van de oefeningen (titel en links op het startscherm) | `EXERCISES` in `js/i18n.js` |
 | Pictogrammen | `js/icons.js` |
+| Luidheid van de stemopnames (gain per regel) | `tools/loudness.py` → `audio/**/gain.json` |
 | Hoe sterk gezicht en gebaren zijn (0 = neutraal, 1 = vol) | `EXPRESSION` in `js/human.js` |
 | Volgorde, timing en gebaren per zin | `js/main.js`, `js/kantine.js` en `js/henk.js` (`runIntro`, `branchA/B/C`) |
 | Klimmen en afdalen (steunpunten, tempo) | `climbDown`, `stepTo`, `climbSteiger` en `slip` in `js/henk.js` |

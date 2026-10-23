@@ -215,18 +215,44 @@ export class AudioEngine {
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
     src.buffer = buf;
+    // Luidheid gelijktrekken per opname (tools/loudness.py → gain.json). De analyser voor de
+    // lipsync krijgt het signaal vóór die correctie, zodat de mond niet anders gaat bewegen.
+    const norm = this.gains?.[id] ?? 1;
     const g = ctx.createGain();
-    g.gain.value = 1.35;
+    g.gain.value = 1.35 * norm;
+    const pre = ctx.createGain();
+    pre.gain.value = 1.35;
     const an = ctx.createAnalyser();
     an.fftSize = 1024;
     an.smoothingTimeConstant = 0.2;
     src.connect(g);
-    g.connect(an);
+    src.connect(pre).connect(an);
     g.connect(panner);
     const ended = new Promise((r) => (src.onended = r));
     const startTime = ctx.currentTime;
     src.start(startTime);
     return { duration: buf.duration, analyser: an, ended, startTime, stop: () => { try { src.stop(); } catch (e) { /* al gestopt */ } } };
+  }
+
+  // Een opname rustiger afspelen (bijv. 0,9×) met behoud van toonhoogte, via een audio-element.
+  voiceMedia(id, url, panner, rate = 1) {
+    if (!this.ctx || typeof Audio !== 'function') return null;
+    try {
+      const el = new Audio(url);
+      el.preservesPitch = true;
+      el.playbackRate = rate;
+      const src = this.ctx.createMediaElementSource(el);
+      const g = this.ctx.createGain();
+      g.gain.value = 1.35 * (this.gains?.[id] ?? 1);
+      src.connect(g).connect(panner);
+      let done;
+      const ended = new Promise((r) => (done = r));
+      el.onended = el.onerror = () => done();
+      el.play().catch(() => done());
+      return { ended, stop: () => { el.pause(); done(); } };
+    } catch (e) {
+      return null;
+    }
   }
 
   level(an) {

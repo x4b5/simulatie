@@ -5,12 +5,12 @@ import { Human } from './human.js';
 import { Forklift } from './forklift.js';
 import { Holds, PlayerArms, contact } from './hands.js';
 import { BoxBody, bodyCapsules } from './boxphys.js';
-import { UI, LINES, CHOICES, OUTCOMES } from './i18n-henk.js';
+import { UI, LINES, CHOICES, OUTCOMES, CHOICE_SHORT, CARD_PICS } from './i18n-henk.js';
 import { HENK_CHOICE_ICON } from './icons.js';
 import {
   $, V, scene, renderer, camera, rig, audio, S, simT, runId, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
-  look, tmp, yawTo, lookAtFn, lookDir, snapLook, playerWalk, playerStop, flinch, shake, playerHead, playerChest, say,
-  playerSays, stopVoice, hideSub, setPhase, goChoice, start,
+  look, tmp, yawTo, lookAtFn, lookDir, lookFrame, snapLook, playerWalk, playerStop, flinch, shake, playerHead, playerChest, say,
+  playerSays, stopVoice, hideSub, setPhase, goChoice, start, narrate,
 } from './sim.js';
 
 // Scenario "Hoog en droog": in een orderpickgang staat Henk (60, al 25 jaar in dienst) zonder
@@ -138,6 +138,15 @@ function seatMarco() {
 }
 
 const henkHead = (v) => henk.headWorld(v);
+// Tweeschot: kijk precies tussen twee gezichten in (de hoek, niet het midden in de ruimte), zodat
+// een hoog gezicht (Henk in de stelling) en een laag gezicht allebei in beeld blijven.
+const _ts = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const twoShot = (fa, fb) => (v) => {
+  const c = camera.getWorldPosition(_ts[2]);
+  const a = fa(_ts[0]).sub(c).normalize();
+  const b = fb(_ts[1]).sub(c).normalize();
+  return v.copy(a).add(b).normalize().multiplyScalar(3).add(c);
+};
 const marcoHead = (v) => marco.headWorld(v);
 const sandraHead = (v) => sandra.headWorld(v);
 // Camerarichting iets onder het hoofd: het gezicht in het bovenste deel van het beeld.
@@ -238,6 +247,14 @@ const carryHold = (side) =>
     pole: [0.7, -0.5, -0.6],
   });
 
+// De speler draagt de doos (A): handpalmen tegen de zijkanten, iets naar achteren.
+const pCarryHold = (side) =>
+  contact(aisle.box, V3((side === 'l' ? 1 : -1) * (BOX_HALF[0] + 0.008), -0.02, -0.06), V3(0, -0.1, 1), side === 'l' ? AX.nx : AX.x, {
+    curl: [0.15, 0.08, 0.04],
+    thumb: 0.1,
+    pole: [0.8, -0.8, -0.5],
+  });
+
 let body; // BoxBody (vallen en botsen)
 const fall = { t: 0, landed: false, hitT: {} };
 const henkCaps = [];
@@ -245,6 +262,30 @@ const armCaps = [];
 const playerCap = { a: new THREE.Vector3(), b: new THREE.Vector3(), r: 0.2, e: 0.1, mu: 0.6, tag: 'body' };
 // Dragen: houding van de doos t.o.v. Henks wortel, van (p0, q0) naar (local, yaw 0).
 const carry = { on: false, k: 1, tok: 0, drop: 0, local: new THREE.Vector3(), p0: new THREE.Vector3(), q0: new THREE.Quaternion() };
+// A: de speler neemt de doos over (in de assen van de speler: x links, y omhoog vanaf het oog, z vooruit).
+const pcarry = { on: false, k: 1, tok: 0, local: new THREE.Vector3(), p0: new THREE.Vector3(), q0: new THREE.Quaternion() };
+const _pf = new THREE.Object3D();
+function playerFrame() {
+  camera.getWorldPosition(_pf.position);
+  camera.getWorldDirection(_a);
+  _pf.rotation.set(0, Math.atan2(_a.x, _a.z), 0);
+  _pf.updateMatrixWorld(true);
+  return _pf;
+}
+function playerTakesBox(local, dur) {
+  const b = aisle.box;
+  carry.on = false;
+  carry.tok++;
+  pcarry.on = true;
+  pcarry.p0.copy(b.position);
+  pcarry.q0.copy(b.quaternion);
+  pcarry.local.copy(local);
+  pcarry.k = 0;
+  const tok = ++pcarry.tok;
+  return tween(dur, (k) => {
+    if (pcarry.tok === tok) pcarry.k = k;
+  });
+}
 
 // Botsers voor de vallende doos: vloer, de doos eronder, roosters, liggers en staanders van het vak.
 function setupBox() {
@@ -284,6 +325,8 @@ function resetBox() {
   tug.tok++;
   carry.on = false;
   carry.tok++;
+  pcarry.on = false;
+  pcarry.tok++;
   fall.landed = false;
   fall.t = 0;
   fall.hitT = {};
@@ -340,6 +383,14 @@ function carryBox(local, dur, drop = 0) {
 const _q = new THREE.Quaternion();
 function updateBox(dt) {
   const b = aisle.box;
+  if (pcarry.on) {
+    const f = playerFrame();
+    const e = ease(pcarry.k);
+    b.position.copy(f.localToWorld(_b.copy(pcarry.local)));
+    b.position.lerpVectors(pcarry.p0, b.position, e);
+    b.quaternion.slerpQuaternions(pcarry.q0, f.quaternion, e);
+    return;
+  }
   if (carry.on) {
     const r = henk.root;
     r.updateMatrixWorld();
@@ -612,6 +663,7 @@ function resetSteiger() {
   push.on = false;
   st.position.copy(STEIGER_PARK).setZ(RACK - 0.03);
   st.rotation.set(0, 0, 0);
+  st.userData.brake?.(0);
   push.prev.copy(st.position);
 }
 
@@ -776,8 +828,9 @@ async function tugLoop(id) {
 function onChoice() {
   henk.lookTarget = playerHead;
   henk.torsoFollow = 0.55;
-  // Iets lager kijken, zodat Henks gezicht boven het keuzepaneel blijft.
-  lookAtFn(faceOf(henk, 1.05), 2);
+  // Henks gezicht in de vrije strook boven het keuzepaneel (zie lookFrame in sim.js).
+  const hv = new THREE.Vector3();
+  lookFrame(() => [henk.headWorld(hv)], 2);
 }
 
 async function runBranch(id, key) {
@@ -803,36 +856,33 @@ async function branchA(id) {
     [3.0, () => (henk.lookTarget = playerHead)],
   ]);
   henk.mood = { worry: 0.2 };
-  // Toch komt hij naar beneden. De speler stapt het midden van de gang in (zo staat de staander
-  // naast Henk in beeld), kijkt even en loopt dan naar de rolsteiger. Henk loopt na het afdalen
-  // de speler tegemoet, wacht aan de gangkant en loopt naast de steiger mee terug.
+  // Toch komt hij naar beneden. De speler loopt meteen naar de rolsteiger (geen lang stuk zonder
+  // woorden); Henk wacht na het afdalen aan de gangkant tot de steiger tegen de stelling staat.
   const st = aisle.steiger;
+  let pushDone = false;
   const along = detach((async () => {
     await climbDown(id);
     guard(id);
-    henk.lookTarget = playerHead;
-    await henk.walkTo([[P.henkMeet.x, P.henkMeet.z]], 1.0);
+    // De speler is al met de steiger op weg: Henk stapt de gang in en wacht aan de kant waar de
+    // steiger komt te staan (niet in het pad van de steiger, niet vlak langs de camera).
+    henk.lookTarget = (v) => v.set(st.position.x, 1.1, st.position.z - 0.5);
+    await henk.walkTo([[P.henkWait.x + 0.3, P.henkWait.z + 0.6], [P.henkWait.x, P.henkWait.z]], 0.9);
     guard(id);
     henk.faceTowards(rig.position.x, rig.position.z);
-    await until(() => push.on && rig.position.x < P.henkMeet.x + 0.25);
-    guard(id);
-    // Naast de speler (aan de gangkant, niet voor de camera langs), ogen op de steiger.
-    henk.lookTarget = (v) => v.set(st.position.x, 1.1, st.position.z - 0.5);
-    await henk.walkTo([[P.henkWait.x + 0.5, P.henkMeet.z], [P.henkWait.x, P.henkWait.z]], 1.15);
+    await until(() => pushDone);
     guard(id);
     henk.lookTarget = playerHead;
     henk.faceTowards(P.talkA2.x, P.talkA2.z);
   })());
-  await wait(0.6);
+  await wait(0.4);
   guard(id);
+  // Geen lang stuk zonder woorden: een korte vertellersregel zegt wat er gebeurt. De speler
+  // loopt meteen naar de steiger terwijl Henk afdaalt (eerst nog even naar Henk kijken).
+  narrate(UI.nA1);
   lookAtFn(faceOf(henk, 0.45), 2);
-  await playerWalk([P.watch], 1.0);
-  guard(id);
-  await wait(1.4);
-  guard(id);
+  later(id, 1.6, () => lookAtFn(() => _b.set(st.position.x, 1.0, st.position.z - 0.7), 1.6));
   // Naast de treden gaan staan en de leuning pakken: de steiger rijdt links voor de speler uit.
   const grabAt = V(st.position.x + PUSH_X, st.position.z + PUSH_Z);
-  lookAtFn(() => _b.set(st.position.x, 1.0, st.position.z - 0.7), 1.6);
   await playerWalk([V(grabAt.x + 0.4, 13.3), grabAt], 1.55);
   guard(id);
   // De steiger een stukje van de stelling af trekken en dan naar Henks vak duwen. Eerst kijkt de
@@ -850,8 +900,9 @@ async function branchA(id) {
     lookAtFn(faceOf(henk, 0.55), 1.4);
     await until(() => rig.position.x < P.henkMeet.x + 1.5);
     guard(id);
-    // Vooruit langs de steiger naar de stelling, iets omlaag: de handen op de leuning in beeld.
-    lookAtFn(() => _b.set(STEIGER_X - 0.4, 0.75, RACK - 0.45), 1.4);
+    // Vooruit naar de stelling en naar de plek waar Henk gaat wachten (hij loopt vlak naast de
+    // speler: recht op zijn hoofd kijken zou zijn gezicht beeldvullend maken).
+    lookAtFn((v) => v.set(P.henkWait.x, 1.25, P.henkWait.z).lerp(st.localToWorld(_a.set(0, 0.9, -0.4)), 0.5), 1.4);
   })());
   await playerWalk([V(STEIGER_X - push.offset.x, rig.position.z)], 1.1);
   guard(id);
@@ -860,8 +911,22 @@ async function branchA(id) {
   await tween(0.5, (k) => (st.position.z = z0 + (RACK - 0.03 - z0) * ease(k)));
   guard(id);
   push.on = false;
+  pushDone = true;
   if (audio.ready) audio.clank(steigerPanner, 0, 300, 0.3);
   later(id, 0.25, () => arms.hide());
+  // Op de rem: even omlaag kijken naar het wiel, het pedaal gaat met een klik naar beneden.
+  const pedalAt = () => st.localToWorld(_b.set(STEIGER.width / 2, 0.1, -STEIGER.platformDepth - STEIGER.steps * STEIGER.step - 0.1));
+  lookAtFn(pedalAt, 2.2);
+  await wait(0.55);
+  guard(id);
+  await tween(0.18, (k) => st.userData.brake?.(k));
+  guard(id);
+  if (audio.ready) audio.clank(steigerPanner, 0, 720, 0.28);
+  narrate(UI.nBrake);
+  await wait(1.0);
+  guard(id);
+  lookAtFn(faceOf(henk, 0.2), 1.8);
+  later(id, 0.9, () => S.sub?.who === 'note' && hideSub());
   // Een stap terug: ruimte voor Henk.
   await along;
   guard(id);
@@ -883,6 +948,7 @@ async function branchA(id) {
   // Henk loopt naar de treden en klimt de steiger op, pakt de doos met twee handen. De speler
   // doet een stap opzij om hem de ruimte te geven.
   henk.lookTarget = null;
+  later(id, 0.6, () => narrate(UI.nClimb));
   playerWalk([P.steigerWatch], 0.8);
   const foot = st.localToWorld(st.userData.tread(1)).z - 0.5;
   await henk.walkTo([[STEIGER_X, foot]], 0.9);
@@ -919,10 +985,68 @@ async function branchA(id) {
   tuckElbows(2.0);
   await Promise.all([carryBox(V3(0, 1.2, 0.36), 2.0, 0.65), pivotOnPlatform(id, 1.25, 1.8)]);
   guard(id);
+  // Nu het verzoek van het begin, maar veilig: Henk geeft de doos laag aan vanaf het platform,
+  // de speler staat naast de onderste trede (niet eronder) en pakt aan. Dan heeft Henk zijn
+  // handen vrij voor de leuning.
   henk.mood = { smile: 0.3 };
-  later(id, 0.3, () => henk.nod(0.8));
-  await wait(2.6);
+  later(id, 0.2, () => henk.nod(0.6));
+  {
+    const hp = henk.root.position;
+    _a.set(rig.position.x - hp.x, 0, rig.position.z - hp.z);
+    const d = _a.length();
+    _a.multiplyScalar(1 / Math.max(0.01, d));
+    const at = V(hp.x + _a.x * 0.95, hp.z + _a.z * 0.95);
+    lookAtFn(boxLook, 2.2);
+    await playerWalk([at], 0.8);
+    guard(id);
+  }
+  henk.lean = 0.14;
+  henk.lookTarget = boxLook;
+  narrate(UI.nGive);
+  const lower = carryBox(V3(0, 0.95, 0.5), 1.0);
+  await wait(0.35);
   guard(id);
+  await arms.show(recvHold('l'), recvHold('r'), 0.65);
+  guard(id);
+  await lower;
+  guard(id);
+  // Overnemen: de doos gaat naar de armen van de speler; Henks handen naar de leuning.
+  const take = playerTakesBox(V3(0, -0.5, 0.42), 0.8);
+  later(id, 0.1, () => {
+    arms.move('l', pCarryHold('l'), 0.45);
+    arms.move('r', pCarryHold('r'), 0.5);
+  });
+  later(id, 0.3, () => {
+    henk.lean = 0;
+    holds.set('l', railHold('l', -0.28), 0.7, { lift: 0.04 });
+    holds.set('r', railHold('r', -0.28), 0.75, { lift: 0.04 });
+  });
+  if (audio.ready) audio.boxDrop(boxPanner, 0.08);
+  // Even naar de doos in je eigen handen kijken, dan weer naar Henk.
+  lookAtFn(() => _b.copy(aisle.box.position), 2.4);
+  await take;
+  guard(id);
+  await wait(0.5);
+  guard(id);
+  henk.lookTarget = playerHead;
+  later(id, 0.3, () => henk.nod(0.6));
+  lookAtFn(faceOf(henk, 0.1), 2.0);
+  // Twee handen aan de leuning: zo komt Henk veilig naar beneden.
+  narrate(UI.nRail);
+  await turnOnPlatform(id);
+  guard(id);
+  await wait(1.2);
+  guard(id);
+}
+
+// Op het platform terugdraaien naar de stelling (yaw 0): zijn handen liggen dan links en rechts op
+// de leuning van het platform, zoals bij het klimmen.
+async function turnOnPlatform(id) {
+  const y = henk.root.rotation.y;
+  if (Math.abs(y) < 0.05) return;
+  holds.set('l', railHold('l', -0.3), 1.1);
+  holds.set('r', railHold('r', -0.3), 1.15);
+  await pivotOnPlatform(id, 0, 1.2);
 }
 
 // Ellebogen bij het draaien met de doos: de linker omlaag langs het lichaam, de rechter (die kant
@@ -1000,7 +1124,11 @@ async function branchB(id) {
     shake(0.06);
     flinch(V(-0.45, -0.25), 0.45);
     if (audio.ready) audio.heartbeat(6, 0.78, 0.8);
-    later(id, 0.2, () => lookAtFn(faceOf(henk, 0.35), 3.2));
+    // Even omlaag naar de doos op de vloer, vlak bij je voeten (dat had jouw hoofd kunnen zijn),
+    // dan terug naar Henk.
+    const at = aisle.box.position.clone();
+    later(id, 0.15, () => lookAtFn(() => _b.copy(at), 3.4));
+    later(id, 1.05, () => lookAtFn(faceOf(henk, 0.35), 3.0));
   };
   await say(id, 'b1', [
     // "Wacht…": verder op de tenen, dieper in de stelling.
@@ -1040,7 +1168,8 @@ async function branchB(id) {
   guard(id);
   marco.lookTarget = henkHead;
   henk.lookTarget = marcoHead;
-  lookAtFn(faceOf(marco, 0.1), 2.6);
+  // Tweeschot: Marco die roept én Henk die aangesproken wordt (zijn reactie is het leermoment).
+  lookAtFn(twoShot(faceOf(marco, 0.1), henkHead), 2.6);
   await wait(0.3);
   guard(id);
   await say(id, 'b3', [
@@ -1051,6 +1180,7 @@ async function branchB(id) {
   // midden van de gang in: ruimte voor Henk.
   henk.mood = { worry: 0.35, sad: 0.15 };
   lookAtFn(faceOf(henk, 0.45), 1.6);
+  later(id, 0.8, () => narrate(UI.nDown));
   playerWalk([P.watch], 0.8);
   later(id, 1.2, () => (marco.lookTarget = playerHead));
   await climbDown(id);
@@ -1149,9 +1279,11 @@ async function branchC(id) {
   henk.lookTarget = sandraHead;
   await wait(0.3);
   guard(id);
+  // Tweeschot: Sandra én Henk in beeld; bij "Henk, kom…" kijkt ze naar hem.
+  lookAtFn(twoShot(faceOf(sandra, 0.1), henkHead), 2.2);
   await say(id, 'c2', [
     [0.0, () => sandra.setHands('firm')],
-    [1.5, () => (sandra.lookTarget = henkHead)],
+    [1.2, () => (sandra.lookTarget = henkHead)],
     [2.4, () => sandra.jab('r', V(HX - 0.3, RACK - 0.6, 0.1), 0.8, 0.5)],
   ]);
   // "Ja, ja. Ik kom al." Hij kijkt de speler niet meer aan.
@@ -1161,6 +1293,7 @@ async function branchC(id) {
   lookAtFn(faceOf(henk, 0.2), 2);
   await say(id, 'c3', [[0.2, () => henk.shake(0.4)], [1.4, () => (henk.lookTarget = V(HX, RACK - 0.1, LV[0]))]]);
   lookAtFn(faceOf(henk, 0.4), 1.4);
+  later(id, 0.8, () => narrate(UI.nDown));
   await climbDown(id);
   guard(id);
   // Beneden: naar Sandra, niet naar de speler.
@@ -1251,8 +1384,9 @@ function update(dt, wdt) {
 }
 
 start({
-  texts: { UI, LINES, CHOICES, OUTCOMES },
+  texts: { UI, LINES, CHOICES, OUTCOMES, CHOICE_SHORT, CARD_PICS },
   choiceIcon: HENK_CHOICE_ICON,
+  previewRate: { A: 0.9 }, // de lange zin bij 'Luister' iets rustiger
   subColors: { henk: '#7cc4ff', marco: '#f2c500', sandra: '#ff8a3d', you: '#5fd48b' },
   lineEmo: LINE_EMO,
   lipsync: 'models/lipsync_henk.json',

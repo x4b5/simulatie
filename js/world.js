@@ -339,16 +339,23 @@ export function buildWorld(scene, renderer) {
   }
 
   // Dak met lichtstraten.
-  const roof = new THREE.Mesh(new THREE.PlaneGeometry(34, 40), std(0x2c3036, 0.95));
+  // Middengrijs dak (geen zwart vlak als je omhoogkijkt), met spanten over de hele hal en
+  // gordingen ertussen, zodat de lichtstraten ergens aan hangen.
+  const roof = new THREE.Mesh(new THREE.PlaneGeometry(34, 40), std(0x8a9099, 0.9, { emissive: 0x565c63, emissiveIntensity: 1 }));
   roof.rotation.x = Math.PI / 2;
   roof.position.set(4, 10, -2);
   world.add(roof);
-  const mTruss = std(0x4c535b, 0.6, { metalness: 0.4 });
-  for (let z = 8; z >= -20; z -= 6) {
-    const t = new THREE.Mesh(new THREE.BoxGeometry(34, 0.35, 0.18), mTruss);
-    t.position.set(4, 9.6, z);
-    world.add(t);
-  }
+  const mTruss = std(0x5a626a, 0.6, { metalness: 0.4, emissive: 0x2c3136, emissiveIntensity: 1 });
+  const trussZ = [];
+  for (let z = 14; z >= -20; z -= 6) trussZ.push(z);
+  const truss = new THREE.InstancedMesh(new THREE.BoxGeometry(34, 0.35, 0.18), mTruss, trussZ.length);
+  trussZ.forEach((z, i) => truss.setMatrixAt(i, new THREE.Matrix4().makeTranslation(4, 9.6, z)));
+  world.add(truss);
+  const purlX = [];
+  for (let x = -11; x <= 19; x += 3) purlX.push(x);
+  const purl = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.16, 40), mTruss, purlX.length);
+  purlX.forEach((x, i) => purl.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 9.86, -2)));
+  world.add(purl);
   const mLamp = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff6e6, emissiveIntensity: 3.2 });
   const lampGeo = new THREE.BoxGeometry(0.5, 0.06, 1.4);
   for (let x = -8; x <= 18; x += 6.5) {

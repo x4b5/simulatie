@@ -5,8 +5,8 @@ import { Forklift, FORK_TIP } from './forklift.js';
 import { UI, LINES, CHOICES, OUTCOMES } from './i18n.js';
 import { CHOICE_ICON } from './icons.js';
 import {
-  $, V, renderer, scene, rig, audio, S, runId, simT, later, waitReal, wait, until, tween, guard, ease, shortAngle,
-  look, player, tmp, tmp2, yawTo, lookAtFn, lookDir, snapLook, playerWalk, playerStop, pathRemaining,
+  $, V, renderer, scene, rig, audio, S, runId, simT, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
+  look, player, tmp, tmp2, yawTo, lookAtFn, lookDir, lookFrame, snapLook, playerWalk, playerStop, pathRemaining,
   flinch, shake, playerHead, playerChest, say, playerSays, stopVoice, hideSub, setPhase, goChoice, start,
 } from './sim.js';
 
@@ -214,14 +214,24 @@ const LINE_EMO = {
   m1: { shout: 1 },
   m2: { shout: 0.55 },
   m3: { shout: 0.15, worry: 0.5 },
-  a1: { worry: 0.3 },
-  a2: { smile: 0.2 },
+  // avert: hoe vaak/sterk de spreker wegkijkt (excuus: omlaag), zie Human.speak.
+  a1: { worry: 0.3, avert: 0.7 },
+  a2: { smile: 0.2, avert: 0.3 },
   b1: { sarcasm: 1, shout: 0.3 },
   b2: { shout: 0.35 },
   c1: { shout: 1 },
   c2: { shout: 0.45 },
   s1: { shout: 0.45 },
 };
+
+// Doel voor een prikgebaar naar de speler. Dichtbij (< 1,4 m) eindigt de hand op borsthoogte
+// (25 cm lager), anders schuift de handschoen voor Marco's mond en valt de lipsync weg.
+function jabChest() {
+  const v = playerChest(new THREE.Vector3());
+  const d = Math.hypot(v.x - marco.root.position.x, v.z - marco.root.position.z);
+  if (d < 1.4) v.y -= 0.25;
+  return v;
+}
 
 // Punt vlak voor iemand op heuphoogte: doel voor een hakgebaar.
 function chopPoint(p) {
@@ -272,6 +282,7 @@ async function exitForklift(id) {
   guard(id);
 
   // 3. Opstaan (motion capture) met de rechterhand aan de voorste stijl.
+  m.exitStage = 3;
   const post = flLocal(0.5, 1.55, 0.5);
   m.setAim('r', post);
   const step = flLocal(0.62, 0.345, 0.18);
@@ -283,6 +294,7 @@ async function exitForklift(id) {
   guard(id);
 
   // 4. Van de treeplank naar de grond.
+  m.exitStage = 4;
   const ground = flLocal(1.15, 0, 0.1);
   m.playForced('walk', 0.7, true);
   await tween(0.75, (k) => {
@@ -396,31 +408,48 @@ async function runIntro(id) {
   guard(id);
 
   await say(id, 'm1', [
-    [0.1, () => marco.setHands('shout')],
-    [0.6, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.6)],
+    [0.0, () => marco.setHands('shout')], // hand al bij het eerste "Hé!" van het stuur
+    [0.6, () => marco.jab('r', jabChest(), 0.6)],
   ]);
-  await exitForklift(id);
-  await marco.walkTo([[P.stand.x, P.stand.z]], 1.6);
+  // Geen dode stilte: Marco hijgt na en begint al aan zijn volgende zin terwijl hij van de
+  // treeplank stapt en naar je toe loopt (eerst was het hier 6,5 s stil).
+  marco.pant = 1;
+  marco.exitStage = 0;
+  const exit = detach(exitForklift(id));
+  await until(() => marco.exitStage >= 3 || id !== runId);
   guard(id);
-  marco.faceTowards(P.stop.x, P.stop.z);
-  marco.setHands('angry');
+  await wait(0.45); // halverwege het opstaan begint hij al te praten
+  guard(id);
   lookAtFn(marcoHead, 4);
-
+  let walk = null;
+  exit.then(() => {
+    if (id !== runId) return;
+    walk = marco.walkTo([[P.stand.x, P.stand.z]], 1.6);
+    walk.then(() => {
+      if (id === runId) marco.faceTowards(P.stop.x, P.stop.z);
+    });
+  });
   await say(id, 'm2', [
-    [0.0, () => marco.setHands('armsOut')],
+    [1.0, () => marco.setHands('armsOut')],
     [2.15, () => {
       marco.setAim('l', WALKWAY);
       marco.lookTarget = WALKWAY;
-      lookAtFn(() => tmp.copy(WALKWAY), 2.2);
+      // Even meekijken naar het voetpad, maar Marco blijft ruim in beeld (hooguit 30° naast hem).
+      lookAtFn((v) => glanceToward(v, marcoHead, WALKWAY, 0.52), 2.2);
     }],
     [3.4, () => (marco.lookTarget = playerHead)],
-    [4.6, () => lookAtFn(marcoHead, 2.5)],
+    [3.55, () => lookAtFn(marcoHead, 2.5)],
     [5.15, () => {
       marco.setAim('l', null);
       marco.setHands('shout');
     }],
     [6.35, () => marco.jab('r', chopPoint(marco), 0.5)],
   ]);
+  await exit;
+  guard(id);
+  if (walk) await walk;
+  guard(id);
+  marco.faceTowards(P.stop.x, P.stop.z);
   marco.setHands('angry');
   await say(id, 'm3', [
     [0.1, () => marco.setHands('armsOut')],
@@ -432,11 +461,25 @@ async function runIntro(id) {
   goChoice();
 }
 
+// Een kijkpunt in de richting van `to`, maar hooguit maxRad (horizontaal) naast `from`.
+const _gA = new THREE.Vector3();
+const _gB = new THREE.Vector3();
+function glanceToward(v, from, to, maxRad) {
+  const c = playerHead(_gA);
+  const f = from(_gB);
+  const a = Math.atan2(f.x - c.x, f.z - c.z);
+  const d = shortAngle(Math.atan2(to.x - c.x, to.z - c.z) - a);
+  const yaw = a + Math.sign(d) * Math.min(Math.abs(d), maxRad);
+  const r = Math.hypot(to.x - c.x, to.z - c.z);
+  return v.set(c.x + Math.sin(yaw) * r, THREE.MathUtils.lerp(f.y, to.y, 0.6), c.z + Math.cos(yaw) * r);
+}
+
 function onChoice() {
   marco.lookTarget = playerHead;
   marco.setHands('angry');
-  // Iets lager kijken, zodat Marco's gezicht boven het keuzepaneel blijft.
-  lookAtFn((v) => marco.headWorld(v).add(tmp2.set(0, -0.62, 0)), 2);
+  // Marco's gezicht in de vrije strook boven het keuzepaneel (zie lookFrame in sim.js).
+  const hv = new THREE.Vector3();
+  lookFrame(() => [marco.headWorld(hv)], 2);
 }
 
 async function runBranch(id, key) {
@@ -449,6 +492,8 @@ async function runBranch(id, key) {
 
 async function branchA(id) {
   later(id, 0.9, () => marco.react('soften'));
+  // Marco verwerkt je excuus: kijkt even weg voor hij antwoordt.
+  later(id, 2.2, () => marco.avert(0.9, 0.5));
   await playerSays(id, 'A');
   marco.angerTarget = 0.4;
   marco.setHands('relaxed');
@@ -456,6 +501,7 @@ async function branchA(id) {
   guard(id);
   await say(id, 'a1', [
     [0.0, () => marco.setHands('calm')],
+    [2.15, () => marco.avert(1.1, 0.9)], // "Sorry dat ik zo schreeuwde": blik omlaag
     [2.1, () => {
       marco.setHands('relaxed');
       marco.angerTarget = 0.12;
@@ -491,7 +537,7 @@ async function branchB(id) {
   marco.angerTarget = 0.85;
   await say(id, 'b1', [
     [0.0, () => marco.setHands('armsOut')],
-    [1.9, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.8)],
+    [1.9, () => marco.jab('r', jabChest(), 0.8)],
     [3.0, () => marco.setHands('angry')],
   ]);
   let walk = null;
@@ -523,8 +569,8 @@ async function branchC(id) {
   shake(0.04);
   await say(id, 'c1', [
     [0.0, () => marco.setHands('shout')],
-    [1.38, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.6)],
-    [2.85, () => marco.jab('r', playerChest(new THREE.Vector3()), 0.5)],
+    [1.38, () => marco.jab('r', jabChest(), 0.6)],
+    [2.85, () => marco.jab('r', jabChest(), 0.5)],
     [3.5, () => marco.setHands('armsOut')],
   ]);
   sandra.root.visible = true;
@@ -546,8 +592,8 @@ async function branchC(id) {
   await say(id, 's1', [
     [0.0, () => sandra.setHands('calm')],
     [1.6, () => (sandra.lookTarget = playerHead)],
-    [2.9, () => sandra.setHands('firm')],
-    [4.3, () => {
+    // Geen praatloop met opgeheven hand (leest als 'hoi'): ze wijst naar het kantoor.
+    [3.95, () => {
       sandra.setAim('r', OFFICE);
       sandra.lookTarget = marcoHead;
     }],
@@ -565,8 +611,15 @@ async function branchC(id) {
   guard(id);
   marco.lookTarget = null;
   marco.setHands('relaxed');
-  marco.walkTo([[1.8, -11.0], [7.5, -15.8], [10.6, -16.6]], 1.3);
+  // Een pas achter Sandra en iets opzij (niet schouder aan schouder: dat leest als hand in hand).
+  marco.walkTo([[2.1, -10.6], [7.6, -15.0], [10.4, -15.9]], 1.12);
   lookAtFn(sandraHead, 2);
+  // "Jullie allebei mee": Sandra kijkt even om naar de speler, en de speler loopt mee.
+  later(id, 0.4, () => (sandra.lookTarget = playerHead));
+  later(id, 1.7, () => (sandra.lookTarget = null));
+  await wait(0.6);
+  guard(id);
+  playerWalk([V(-0.2, -9.5), V(1.5, -11.5)], 1.1);
   await wait(2.4);
   guard(id);
 }
@@ -576,11 +629,13 @@ const hudEl = $('#hud');
 let hudT0 = 0;
 function showHud(on) {
   hudEl.hidden = !on;
-  hudT0 = performance.now();
+  hudT0 = simT;
 }
+// De afteltijd loopt op de simulatietijd (staat stil als de oefening stilstaat) en begint op
+// 01:30: echte haast.
 function tickHud() {
   if (hudEl.hidden) return;
-  const left = Math.max(0, 238 - (performance.now() - hudT0) / 1000);
+  const left = Math.max(0, 90 - (simT - hudT0));
   const m = Math.floor(left / 60);
   const s = Math.floor(left % 60);
   hudEl.querySelector('.hud-time').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;

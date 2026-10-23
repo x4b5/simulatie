@@ -341,6 +341,38 @@ function buildSteiger() {
       wm.rotation.z = Math.PI / 2;
     }
   }
+  // Rempedalen op de twee wielen aan de gangkant: omhoog = los, omlaag = op de rem.
+  const pedalMat = std(0xd8322a, 0.5, { metalness: 0.2 });
+  const pedals = [];
+  for (const sx of [-1, 1]) {
+    const pv = new THREE.Group();
+    pv.position.set(sx * (hw - 0.02), 0.115, zBack + 0.03);
+    const pd = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.014, 0.09), pedalMat);
+    pd.position.set(0, 0, -0.045);
+    pd.castShadow = true;
+    pv.add(pd);
+    pv.rotation.x = -0.55;
+    root.add(pv);
+    pedals.push(pv);
+  }
+  root.userData.brake = (k) => {
+    for (const pv of pedals) pv.rotation.x = -0.55 * (1 - k);
+  };
+  // Bordje "TRAP" aan beide kanten: het woord dat de speler zegt, bij het ding dat je ziet.
+  const trapMap = canvas(160, 64, (g, w, h) => {
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#111';
+    g.font = `800 44px ${FONT}`;
+    g.textAlign = 'center';
+    g.fillText('TRAP', w / 2, 48);
+  });
+  for (const sx of [-1, 1]) {
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.08), std(0xffffff, 0.6, { map: trapMap }));
+    sign.position.set(sx * (hw + 0.026), 0.62, -S.platformDepth - 0.3);
+    sign.rotation.y = (sx * Math.PI) / 2;
+    root.add(sign);
+  }
   // Sticker met maximale belasting.
   const sticker = new THREE.Mesh(
     new THREE.PlaneGeometry(0.16, 0.1),

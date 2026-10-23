@@ -60,11 +60,11 @@ function drawBlocks(g, blocks, x, y, innerW) {
   return y;
 }
 
-function panelMesh(widthPx, blocks, { bg = 'rgba(17,20,24,0.92)', accent = null, pad = 44 } = {}) {
+function panelMesh(widthPx, blocks, { bg = 'rgba(17,20,24,0.92)', accent = null, pad = 44, minH = 0 } = {}) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   const innerW = widthPx - pad * 2;
-  const h = Math.ceil(measureBlocks(g, blocks, innerW) + pad * 2);
+  const h = Math.max(minH, Math.ceil(measureBlocks(g, blocks, innerW) + pad * 2));
   c.width = widthPx;
   c.height = h;
   g.clearRect(0, 0, widthPx, h);
@@ -160,8 +160,8 @@ export class VRUI {
     this.hideSubtitle();
     if (!this.active) return;
     const blocks = [
-      { text: label.toUpperCase(), size: 30, weight: 700, font: FONT_HEAD, color: labelColor, gap: 0 },
-      { text: nl, size: 44, weight: 700, color: '#ffffff', gap: 10 },
+      ...(label ? [{ text: label.toUpperCase(), size: 30, weight: 700, font: FONT_HEAD, color: labelColor, gap: 0 }] : []),
+      { text: nl, size: 44, weight: 700, color: '#ffffff', gap: label ? 10 : 0 },
     ];
     if (other) blocks.push({ text: other, size: 34, color: '#b9c2bf', gap: 12, dir });
     const m = panelMesh(1300, blocks, { bg: 'rgba(12,14,17,0.82)' });
@@ -225,11 +225,17 @@ export class VRUI {
     const p = panelMesh(1700, blocks, { bg: 'rgba(12,14,17,0.93)', accent });
     group.add(p);
     let x = -p.userData.w / 2;
-    const bw = (p.userData.w - 0.03) / buttons.length;
+    const bw = (p.userData.w - 0.03 * (buttons.length - 1)) / buttons.length;
+    // Alle knoppen even hoog, ook als een label over twee regels loopt.
+    const mc = document.createElement('canvas').getContext('2d');
+    const bpx = Math.round(bw * PX_PER_M);
+    const btnBlocks = (btn) => [{ text: btn.label, size: 38, weight: 700, color: btn.primary ? '#141414' : '#ffffff', gap: 0 }];
+    const minH = Math.max(...buttons.map((btn) => Math.ceil(measureBlocks(mc, btnBlocks(btn), bpx - 60) + 60)));
     for (const btn of buttons) {
-      const b = panelMesh(Math.round(bw * PX_PER_M), [{ text: btn.label, size: 38, weight: 700, color: btn.primary ? '#141414' : '#ffffff', gap: 0 }], {
+      const b = panelMesh(bpx, btnBlocks(btn), {
         bg: btn.primary ? 'rgba(242,197,0,1)' : 'rgba(40,46,52,0.96)',
         pad: 30,
+        minH,
       });
       b.position.set(x + bw / 2, -p.userData.h / 2 - b.userData.h / 2 - 0.03, 0);
       x += bw + 0.03;

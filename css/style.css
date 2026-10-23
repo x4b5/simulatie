@@ -757,3 +757,21 @@ body.can-read .c-head { padding-right: 140px; }
 @media (max-height: 760px) and (min-width: 761px) {
   .c-sub, .c-sub-tr { display: none; }
 }
+
+/* Na de tweede keuze drie knoppen: 'Kies een ander antwoord' over de hele breedte, daaronder
+   'Terug naar het begin van het gesprek' en 'Opnieuw beginnen' (op smalle schermen naast elkaar). */
+.r-actions.three #btn-retry { grid-column: 1 / -1; }
+#btn-retry1[hidden] { display: none; }
+
+/* Tweede keuzescherm: de tegenwerping van de ander, om nog eens te horen. */
+.c-quote {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 12px; padding: 8px 12px;
+  background: transparent; color: var(--muted); border: 2px solid var(--line); border-radius: var(--radius);
+  font: 600 1rem/1.3 var(--body, inherit); text-align: start; cursor: pointer;
+}
+.c-quote .ic { flex: none; width: 24px; height: 24px; }
+.c-quote .q-txt { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.c-quote b { color: var(--fg); }
+.c-quote:hover, .c-quote.playing { border-color: var(--walk-bright); color: var(--walk-bright); }
+.c-quote.playing .ic { animation: pulse 0.8s ease-in-out infinite alternate; }
+@media (max-height: 520px) { .c-quote { margin-bottom: 6px; padding: 4px 10px; font-size: 0.85rem; } .c-quote .q-txt { -webkit-line-clamp: 1; } }

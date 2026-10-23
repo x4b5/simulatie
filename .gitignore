@@ -1,0 +1,4 @@
+# Lokale hulpmiddelen (niet in de repo)
+__pycache__/
+tools/node_modules
+node_modules/

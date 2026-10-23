@@ -57,6 +57,14 @@ export const ICONS = {
   ladder: svg('<path d="M8 42L26 13h13v29M14 33h8M19 24h8"/><path d="M4 29L22 4h18v9"/><circle cx="9" cy="44" r="2"/><circle cx="38" cy="44" r="2"/>'),
   // Waarschuwingsdriehoek (gevaar)
   warn: svg('<path d="M24 5L44 41H4z"/><path d="M24 18v11"/><circle cx="24" cy="34.5" r="1.6" fill="currentColor"/>'),
+  // Voetstappen (zool en hak, gevuld): (voortaan) over het pad lopen
+  walk: svg('<g fill="currentColor" stroke="none"><path d="M14 4c4.2 0 6.3 4.3 6.3 9.4S18 21.5 14 21.5s-6.3-3-6.3-8.1S9.8 4 14 4z"/><ellipse cx="14.6" cy="27.2" rx="4.1" ry="4.4"/><path d="M34 16.5c4.2 0 6.3 4.3 6.3 9.4S38 34 34 34s-6.3-3-6.3-8.1 2.1-9.4 6.3-9.4z"/><ellipse cx="33.4" cy="39.7" rx="4.1" ry="4.4"/></g>'),
+  // Tekstballon met puntjes: iets zeggen en het daarbij laten ('ja ja', 'laat maar')
+  speechDots: svg('<path d="M8 7h32a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H22l-9 8v-8H8a4 4 0 0 1-4-4V11a4 4 0 0 1 4-4z"/><circle cx="15" cy="20" r="1.8" fill="currentColor"/><circle cx="24" cy="20" r="1.8" fill="currentColor"/><circle cx="33" cy="20" r="1.8" fill="currentColor"/>'),
+  // Tekstballon met vraagteken: een vraag terugkaatsen
+  speechQ: svg('<path d="M8 7h32a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H22l-9 8v-8H8a4 4 0 0 1-4-4V11a4 4 0 0 1 4-4z"/><path d="M19.5 15.5a4.5 4.5 0 1 1 6.3 4.1c-1.2.6-1.8 1.4-1.8 2.9"/><circle cx="24" cy="27" r="1.6" fill="currentColor"/>'),
+  // Terug naar het begin (van het gesprek)
+  toStart: svg('<path d="M10 10v28"/><path d="M38 11L17 24l21 13z"/>'),
   // Spreekballon met uitroepteken (iets stelligs zeggen)
   speechBang: svg('<path d="M8 7h32a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H22l-9 8v-8H8a4 4 0 0 1-4-4V11a4 4 0 0 1 4-4z"/><path d="M24 13v9"/><circle cx="24" cy="27" r="1.6" fill="currentColor"/>'),
   // Wiel met rempedaal (rolsteiger op de rem)
@@ -68,7 +76,8 @@ export const ICONS = {
 // Pictogram per antwoord en per sfeer. De pictogrammen van de antwoorden beschrijven wát je
 // zegt of doet (gevaar, haast, stop …), niet of het een goed antwoord is: geen hartje voor het
 // 'goede' antwoord en geen boos gezicht voor het 'foute'.
-export const CHOICE_ICON = { A: 'warn', B: 'hurry', C: 'hand' };
-export const CANTEEN_CHOICE_ICON = { A: 'hand', B: 'laugh', C: 'speechBang' };
-export const HENK_CHOICE_ICON = { A: 'ladder', B: 'boxHands', C: 'speechBang' };
+// Tweede keuze (na A): pictogrammen beschrijven wat je zegt, niet of het goed is.
+export const CHOICE_ICON = { A: 'warn', B: 'hurry', C: 'hand', A2: 'walk', B2: 'speechDots', C2: 'speechQ' };
+export const CANTEEN_CHOICE_ICON = { A: 'hand', B: 'laugh', C: 'speechBang', A2: 'hand', B2: 'speechDots', C2: 'speechBang' };
+export const HENK_CHOICE_ICON = { A: 'ladder', B: 'boxHands', C: 'speechBang', A2: 'ladder', B2: 'boxHands', C2: 'report' };
 export const MOOD_ICON = { calm: 'faceCalm', tense: 'faceTense', escalated: 'faceAngry' };

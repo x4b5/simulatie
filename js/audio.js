@@ -1,6 +1,18 @@
 // Ruimtelijk geluid: stemmen (ElevenLabs), galm van de ruimte en
 // procedureel gemaakte geluidseffecten (heftruck, claxon, remmen, voetstappen, kantine).
 
+// Vangnet: een ongeldige waarde (NaN/Infinity) uit een animatie mag WebAudio nooit een fout laten
+// gooien, want die stopt de beeldlus. Zo'n waarde wordt genegeerd (de parameter houdt zijn waarde).
+if (typeof AudioParam !== 'undefined' && !AudioParam.prototype.__finiteGuard) {
+  for (const name of ['setTargetAtTime', 'setValueAtTime', 'linearRampToValueAtTime']) {
+    const orig = AudioParam.prototype[name];
+    AudioParam.prototype[name] = function (v, ...rest) {
+      return Number.isFinite(v) ? orig.call(this, v, ...rest) : this;
+    };
+  }
+  AudioParam.prototype.__finiteGuard = true;
+}
+
 export class AudioEngine {
   constructor() {
     this.ctx = null;
@@ -179,7 +191,7 @@ export class AudioEngine {
   }
 
   place(panner, v) {
-    if (!panner) return;
+    if (!panner || !v || !Number.isFinite(v.x + v.y + v.z)) return;
     const t = this.ctx.currentTime;
     if (panner.positionX) {
       panner.positionX.setTargetAtTime(v.x, t, 0.03);
@@ -190,6 +202,8 @@ export class AudioEngine {
 
   updateListener(pos, fwd, up) {
     if (!this.ctx) return;
+    // Een ongeldige waarde (NaN) zou WebAudio een fout laten gooien en de beeldlus stoppen.
+    if (![pos.x, pos.y, pos.z, fwd.x, fwd.y, fwd.z, up.x, up.y, up.z].every(Number.isFinite)) return;
     const l = this.ctx.listener;
     const t = this.ctx.currentTime;
     if (l.positionX) {

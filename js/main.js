@@ -185,7 +185,7 @@ function resetScene(state) {
     marco.anger = marco.angerTarget = 0.05;
     lookDir(yawTo(P.start, P.walk1), -0.08);
     snapLook();
-  } else if (state === 'choice') {
+  } else if (state === 'choice' || state === 'choice2') {
     showHud(false);
     rig.position.copy(P.stop);
     fl.root.position.copy(P.flStop);
@@ -198,6 +198,12 @@ function resetScene(state) {
     marco.setAim('l', null);
     marco.setAim('r', null);
     marco.lookTarget = playerHead;
+    // Tweede keuze: Marco heeft je sorry net weggewuifd (x1) en wacht met de armen over elkaar.
+    if (state === 'choice2') {
+      marco.anger = marco.angerTarget = 0.8;
+      marco.setHands('crossed');
+      marco.pant = 0.5;
+    }
     lookAtFn(marcoHead, 5);
     snapLook();
   }
@@ -222,6 +228,10 @@ const LINE_EMO = {
   c1: { shout: 1 },
   c2: { shout: 0.45 },
   s1: { shout: 0.45 },
+  // Volhouden: Marco valt meteen in na je sorry (x1), stug en afkoelend (h1), geërgerd (x2).
+  x1: { shout: 0.7, pre: 0.08 },
+  h1: { sarcasm: 0.25, avert: 0.5, pre: 0.1, tail: 0.3 },
+  x2: { shout: 0.4, pre: 0.12 },
 };
 
 // Doel voor een prikgebaar naar de speler. Dichtbij (< 1,4 m) eindigt de hand op borsthoogte
@@ -474,9 +484,9 @@ function glanceToward(v, from, to, maxRad) {
   return v.set(c.x + Math.sin(yaw) * r, THREE.MathUtils.lerp(f.y, to.y, 0.6), c.z + Math.cos(yaw) * r);
 }
 
-function onChoice() {
+function onChoice(stage) {
   marco.lookTarget = playerHead;
-  marco.setHands('angry');
+  marco.setHands(stage === 2 ? 'crossed' : 'angry');
   // Marco's gezicht in de vrije strook boven het keuzepaneel (zie lookFrame in sim.js).
   const hv = new THREE.Vector3();
   lookFrame(() => [marco.headWorld(hv)], 2);
@@ -485,20 +495,78 @@ function onChoice() {
 async function runBranch(id, key) {
   lookAtFn(marcoHead, 4);
   marco.lookTarget = playerHead;
-  if (key === 'A') await branchA(id);
-  else if (key === 'B') await branchB(id);
-  else await branchC(id);
+  if (key === 'A') return branchA(id);
+  if (key === 'A2') return branchA2(id);
+  if (key === 'B2') return branchB2(id);
+  if (key === 'C2') return branchC2(id);
+  if (key === 'B') return branchB(id);
+  return branchC(id);
 }
 
+// Punt bij de vorken van de heftruck (waar Marco naar wijst: "onder mijn vork").
+const forkPoint = () => fl.root.localToWorld(new THREE.Vector3(0, 0.7, FORK_TIP - 0.9));
+
+// A: je zegt sorry, maar Marco is nog niet klaar. Hij wuift het weg (x1) → tweede keuze.
 async function branchA(id) {
-  later(id, 0.9, () => marco.react('soften'));
-  // Marco verwerkt je excuus: kijkt even weg voor hij antwoordt.
-  later(id, 2.2, () => marco.avert(0.9, 0.5));
+  // Tijdens je sorry: nog vol adrenaline. Klein hoofdschudden, bij "Sorry" ongelovige wenkbrauwen.
+  later(id, 1.1, () => marco.shake(0.45));
+  later(id, 2.6, () => {
+    marco.surprise = 0.35;
+    marco.angerTarget = 0.95;
+  });
   await playerSays(id, 'A');
-  marco.angerTarget = 0.4;
-  marco.setHands('relaxed');
-  await wait(0.6);
+  marco.setHands('armsOut');
+  await say(id, 'x1', [
+    [0.55, () => marco.react('startle')], // "Sorry?"
+    [2.4, () => {
+      // "… als je straks onder mijn vork ligt": korte hakbeweging en blik naar de vorken. De camera
+      // blijft op Marco (de vorken liggen vlak voor je voeten; omlaag kijken haalt hem uit beeld).
+      // Alleen de hand en een korte blik omlaag: met de blik vol op de vorken (opzij, laag) draait
+      // hij zijn hele lichaam weg van de speler.
+      marco.jab('l', forkPoint(), 0.6, 0.35);
+      marco.avert(0.5, 0.8);
+    }],
+    [3.25, () => marco.jab('r', jabChest(), 0.5)],
+  ]);
+  marco.pant = 0.6;
+  marco.angerTarget = 0.8;
+  // Armen over elkaar: hij wacht af wat je nu zegt.
+  marco.setHands('crossed');
+  await wait(0.9);
   guard(id);
+  return 'choice2';
+}
+
+// A2: rustig blijven en het nog een keer zeggen. Marco is stug, koelt af, en bindt in.
+async function branchA2(id) {
+  // Bij "over het pad" kijkt hij even naar het voetpad, bij het einde zakken de schouders iets.
+  later(id, 2.0, () => (marco.lookTarget = WALKWAY));
+  later(id, 2.75, () => (marco.lookTarget = playerHead));
+  later(id, 3.0, () => {
+    marco.angerTarget = 0.6;
+    marco.sigh(0.5);
+  });
+  await playerSays(id, 'A2');
+  await say(id, 'h1', [
+    [0.8, () => marco.avert(1.0, 0.25)], // "Hm.": even weg, nog niet overtuigd
+    [1.65, () => (marco.lookTarget = playerHead)],
+    [2.0, () => marco.nod(0.35)], // "Dat zeg je nu.": nauwelijks een knik
+  ]);
+  // Een echte stilte: hij zakt, de armen gaan los, hij ademt uit.
+  marco.angerTarget = 0.45;
+  marco.pant = 0;
+  await wait(0.7);
+  guard(id);
+  marco.setHands('relaxed');
+  marco.sigh(0.9);
+  await wait(1.3);
+  guard(id);
+  await calmEnding(id);
+}
+
+// Het bestaande einde van A: Marco zegt ook sorry, legt het pad nog eens uit en rijdt rustig weg.
+async function calmEnding(id) {
+  marco.angerTarget = 0.4;
   await say(id, 'a1', [
     [0.0, () => marco.setHands('calm')],
     [2.15, () => marco.avert(1.1, 0.9)], // "Sorry dat ik zo schreeuwde": blik omlaag
@@ -529,6 +597,58 @@ async function branchA(id) {
   fl.driveTo(10.5, P.flLane, { maxSpeed: 1.2, accel: 0.6, decel: 1 });
   await wait(2.6);
   guard(id);
+}
+
+// B2: je geeft op ("Ja ja, ik zei toch sorry"). Marco hoort dat je het niet meent en rijdt geërgerd weg.
+async function branchB2(id) {
+  later(id, 0.55, () => {
+    marco.surprise = 0.45; // "Ja ja?": wenkbrauwen omhoog
+    marco.angerTarget = 0.95;
+  });
+  later(id, 1.5, () => marco.react('scoff'));
+  await playerSays(id, 'B2');
+  await say(id, 'x2', [
+    [0.05, () => marco.setHands('armsOut')],
+    [1.15, () => marco.jab('r', jabChest(), 0.55)], // "Dit is geen grap"
+    [2.2, () => marco.setHands('angry')],
+  ]);
+  // Hij schudt zijn hoofd, draait zich om en loopt naar de heftruck.
+  await wait(0.45);
+  guard(id);
+  marco.shake(0.8);
+  await wait(0.8);
+  guard(id);
+  marco.lookTarget = null;
+  marco.setHands('relaxed');
+  later(id, 1.0, () => (marco.lookTarget = playerHead)); // nog één blik over zijn schouder
+  later(id, 1.8, () => (marco.lookTarget = null));
+  await marco.walkTo([[P.exitSide.x, P.exitSide.z]], 1.5);
+  guard(id);
+  await enterForklift(id);
+  lookAtFn(() => fl.root.localToWorld(tmp.set(0, 1.6, 0)), 2);
+  fl.driveTo(10.5, P.flLane, { maxSpeed: 2.4, accel: 1.6, decel: 1.6 });
+  await wait(2.2);
+  guard(id);
+}
+
+// C2: je wordt alsnog boos ("Wat wil je nou nog meer van me?"). Marco ontploft, Sandra komt.
+async function branchC2(id) {
+  later(id, 0.6, () => marco.react('startle'));
+  await playerSays(id, 'C2');
+  marco.angerTarget = 1;
+  marco.setHands('shout');
+  marco.walkTo([[P.standClose.x, P.standClose.z]], 1.0).then(() => marco.faceTowards(P.stop.x, P.stop.z));
+  later(id, 0.45, () => flinch(V(-0.22, -0.12), 0.6, false));
+  shake(0.04);
+  await wait(0.35);
+  guard(id);
+  // Pas nu het luid wordt, hoort Sandra het en komt ze eraan (net als in C): zo zegt Marco niet
+  // 'ik ga het melden bij Sandra' terwijl ze al aan komt lopen.
+  sandra.root.visible = true;
+  sandra.root.position.copy(P.sandraStart);
+  sandra.lookTarget = marcoHead;
+  const sw = sandra.walkTo([[-1.7, -12.0], [P.sandraStop.x, P.sandraStop.z]], 2.1);
+  await sandraComes(id, sw, [[0.0, () => marco.jab('r', jabChest(), 0.6)]]);
 }
 
 async function branchB(id) {
@@ -577,14 +697,20 @@ async function branchC(id) {
   sandra.root.position.copy(P.sandraStart);
   sandra.lookTarget = marcoHead;
   const sw = sandra.walkTo([[-1.7, -12.0], [P.sandraStop.x, P.sandraStop.z]], 2.1);
+  await sandraComes(id, sw);
+}
+
+// Vervolg van C (en C2): Marco gaat Sandra erbij halen, zij komt en neemt jullie mee naar kantoor.
+async function sandraComes(id, sw, c2cues = []) {
   await say(id, 'c2', [
+    ...c2cues,
     [1.75, () => marco.setAim('r', OFFICE)],
     [2.6, () => {
       marco.setAim('r', null);
       marco.setHands('angry');
     }],
   ]);
-  await sw;
+  if (sw) await sw;
   guard(id);
   sandra.faceTowards((marco.root.position.x + P.stop.x) / 2, (marco.root.position.z + P.stop.z) / 2);
   marco.lookTarget = sandraHead;

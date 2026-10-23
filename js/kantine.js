@@ -7,7 +7,7 @@ import { CANTEEN_CHOICE_ICON } from './icons.js';
 import {
   V, renderer, scene, rig, audio, S, simT, runId, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
   look, lookAtFn, lookDir, lookFrame, lookSettled, snapLook, flinch, playerHead, playerChest, say, playerSays,
-  stopVoice, hideSub, setPhase, goChoice, start,
+  stopVoice, hideSub, setPhase, goChoice, start, camera,
 } from './sim.js';
 
 // Scenario "Grap in de kantine": lunchpauze, Dennis maakt een grap over de uitspraak van
@@ -146,6 +146,19 @@ function groupLook(people, dy) {
     v.set(0, 0, 0);
     for (const p of people) v.add(p.headWorld(_c));
     return v.multiplyScalar(1 / people.length).add(_c.set(0, -dy, 0));
+  };
+}
+
+// Kijkdoel in het hoekmidden tussen twee hoofden (w: hoeveel naar a). Anders dan groupLook telt
+// iemand die dichtbij zit even zwaar als iemand verderop: zo valt hij niet half buiten beeld.
+const _am = new THREE.Vector3();
+const _an = new THREE.Vector3();
+function angleMid(a, b, w = 0.5, dy = 0.1) {
+  return (v) => {
+    camera.getWorldPosition(_am);
+    const da = a.headWorld(_an).sub(_am).normalize().multiplyScalar(w);
+    const db = b.headWorld(_c).sub(_am).normalize().multiplyScalar(1 - w);
+    return v.copy(da).add(db).normalize().multiplyScalar(2).add(_am).add(_c.set(0, -dy, 0));
   };
 }
 
@@ -466,13 +479,22 @@ function resetScene(state) {
     marco.lookTarget = headOf(dennis);
     lookDir(0.75, -0.1);
     snapLook();
-  } else if (state === 'choice') {
+  } else if (state === 'choice' || state === 'choice2') {
     tomasz.root.position.copy(STAND);
     tomasz.root.rotation.y = Math.atan2(0.1 - STAND.x, 0.1 - STAND.z);
     tomasz.mood = { sad: 0.45 };
     tomasz.playForced('listenSad', 1, true, 0.6);
     dennis.mood = { smile: 0.4 };
-    onChoice();
+    // Tweede keuze: Dennis heeft het weggelachen (x1), armen over elkaar; Tomasz' geforceerde
+    // glimlach, Marco zit er ongemakkelijk bij.
+    if (state === 'choice2') {
+      dennis.mood = { smile: 0.3, sarcasm: 0.3 };
+      dennis.armPose = 'crossed';
+      dennis.lean = 0.1;
+      tomasz.mood = { sad: 0.4, smile: 0.15 };
+      marco.sitClip = 'sitTableNervous';
+    }
+    onChoice(state === 'choice2' ? 2 : 1);
     snapLook();
   }
   updateTray();
@@ -500,6 +522,9 @@ const LINE_EMO = {
   c1: { shout: 1 },
   c2: { shout: 0.4 },
   c3: { sad: 0.5, worry: 0.3 },
+  // Volhouden: Dennis lacht je eerste 'stop' weg (x1) en voelt zich gelijk gekregen (x2).
+  x1: { smile: 0.35, sarcasm: 0.45, pre: 0.3 },
+  x2: { smile: 0.5, sarcasm: 0.3, pre: 0.25 },
 };
 
 const PEOPLE = { marco: () => marco, dennis: () => dennis, tomasz: () => tomasz };
@@ -602,14 +627,17 @@ async function runIntro(id) {
 }
 
 // Bij de keuze kijken ze alle drie naar de speler.
-function onChoice() {
+function onChoice(stage = 1) {
   for (const p of [dennis, marco, tomasz]) p.settle(99);
   stagger(runId, [dennis, marco, tomasz], (p) => (p.lookTarget = playerHead), 0.05, 0.35);
   dennis.lean = 0.06;
   // Alle drie de gezichten in de vrije strook boven het keuzepaneel (zie lookFrame in sim.js).
   const hv = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   // Volgorde = belang: Tomasz (om hem gaat het), Dennis, dan Marco (valt op een smal scherm af).
-  lookFrame(() => [tomasz, dennis, marco].map((p, i) => p.headWorld(hv[i])), 2.2);
+  // Bij de tweede keuze antwoord je Dennis (hij daagde je net uit): dan staat hij voorop, zodat hij
+  // ook op een telefoon in beeld blijft (ook na 'Kies een ander antwoord').
+  const order = stage === 2 ? [dennis, tomasz, marco] : [tomasz, dennis, marco];
+  lookFrame(() => order.map((p, i) => p.headWorld(hv[i])), 2.2);
 }
 
 async function runBranch(id, key) {
@@ -618,10 +646,15 @@ async function runBranch(id, key) {
   // terwijl Dennis sorry zegt). Pas na de laatste zin mag dat weer.
   for (const p of [dennis, marco, tomasz]) p.settle(99);
   lookAtFn(faceOf(dennis), 3);
-  if (key === 'A') await branchA(id);
+  let next;
+  if (key === 'A') next = await branchA(id);
+  else if (key === 'A2') await branchA2(id);
+  else if (key === 'B2') await branchB2(id);
+  else if (key === 'C2') await branchC(id, 'C2');
   else if (key === 'B') await branchB(id);
   else await branchC(id);
   guard(id);
+  if (next) return next; // tweede keuze: iedereen blijft bij het gesprek
   for (const p of [dennis, marco, tomasz]) p.fidgetT = rnd(3, 8);
 }
 
@@ -649,6 +682,91 @@ async function branchA(id) {
   dennis.lean = 0.1;
   await say(id, 'a1', [[1.2, () => (dennis.lookTarget = headOf(marco))]]);
 
+  // Hij laat het niet zitten: "Doe niet zo gevoelig, man. Tomasz kan heus wel tegen een grapje.
+  // Toch, Tomasz?" Tomasz lacht geforceerd mee en kijkt weg; Marco zit er ongemakkelijk bij.
+  await wait(0.35);
+  guard(id);
+  dennis.lookTarget = playerHead;
+  dennis.mood = { smile: 0.3, sarcasm: 0.4 };
+  await say(id, 'x1', [
+    [0.1, () => (dennis.lean = 0.16)], // naar voren: "Doe niet zo gevoelig"
+    [1.75, () => {
+      dennis.lookTarget = headOf(tomasz);
+      dennis.armPose = null;
+      dennis.jab('l', towardFrom(dennis, tomasz, 0.36, 1.05), 0.8, 0.35);
+      // Dennis en Tomasz allebei in beeld. Dennis zit dichtbij: het gewone midden van hun hoofden
+      // ligt dan bijna bij Tomasz en Dennis viel half buiten beeld; daarom het hoekmidden.
+      lookAtFn(angleMid(dennis, tomasz, 0.55, 0.1), 1.8);
+    }],
+    [2.4, () => {
+      marco.lookTarget = tablePoint('marco', 0, 0.4);
+      marco.sitClip = 'sitTableNervous';
+    }],
+    // Voor "Toch, Tomasz?" gaat de blik naar Tomasz (groot in beeld): zijn geforceerde glimlach.
+    [3.6, () => lookAtFn(faceOf(tomasz), 2.6)],
+    [3.9, () => (tomasz.lookTarget = headOf(dennis))],
+    // "Toch, Tomasz?": hij grijnst naar Tomasz, die geforceerd glimlacht en wegkijkt.
+    [4.15, () => (tomasz.mood = { smile: 0.35, sad: 0.25 })],
+  ]);
+  tomasz.nod(0.25);
+  await wait(0.5);
+  guard(id);
+  tomasz.lookTarget = tablePoint('tomasz', 0.15, 0.3);
+  tomasz.mood = { sad: 0.4, smile: 0.15 };
+  dennis.lookTarget = playerHead;
+  dennis.armPose = 'crossed';
+  dennis.lean = 0.1;
+  await wait(0.9);
+  guard(id);
+  return 'choice2';
+}
+
+// A2: rustig volhouden ("Voor Tomasz is het geen grapje. Kap er gewoon mee."). Daarna het bestaande
+// einde van A: Marco valt bij, Dennis zegt mopperend sorry, Tomasz komt erbij zitten.
+async function branchA2(id) {
+  later(id, 0.4, () => (tomasz.lookTarget = playerHead)); // Tomasz kijkt op bij zijn naam
+  later(id, 1.5, () => {
+    dennis.mood = {};
+    dennis.surprise = 0.3;
+    tomasz.mood = { worry: 0.3 };
+  });
+  later(id, 2.2, () => (marco.lookTarget = headOf(dennis)));
+  await playerSays(id, 'A2');
+  // Ongemakkelijke stilte: Dennis kijkt naar zijn bord.
+  dennis.angerTarget = 0.25;
+  dennis.lookTarget = tablePoint('dennis', 0, 0.5);
+  marco.sitClip = 'sitTable';
+  await wait(1.1);
+  guard(id);
+  await calmEnding(id);
+}
+
+// B2: opgeven ("Nou ja… laat maar."). Dennis voelt zich gelijk gekregen, Tomasz gaat weg.
+async function branchB2(id) {
+  later(id, 0.7, () => {
+    dennis.mood = { smile: 0.55 };
+    tomasz.mood = { sad: 0.75 };
+    tomasz.lookTarget = tablePoint('tomasz', 0, 0.2);
+  });
+  later(id, 1.4, () => (marco.lookTarget = tablePoint('marco', 0, 0.4)));
+  await playerSays(id, 'B2');
+  dennis.armPose = null;
+  dennis.lean = 0.18;
+  await say(id, 'x2', [
+    [0.1, () => dennis.chuckle(0.8, 0.35)],
+    [1.15, () => {
+      // "Niks aan de hand.": schouders op, blik naar Tomasz.
+      fidget(dennis, 'sitTableShrug', 1.15);
+      dennis.lookTarget = headOf(tomasz);
+    }],
+  ]);
+  dennis.lean = 0.05;
+  await wait(0.6);
+  guard(id);
+  await tomaszLeaves(id);
+}
+
+async function calmEnding(id) {
   // Marco kiest partij.
   lookAtFn(faceOf(marco), 2.4);
   marco.lookTarget = headOf(dennis);
@@ -724,7 +842,11 @@ async function branchB(id) {
   ]);
   dennis.lean = 0.05;
 
-  // Tomasz geeft het op en gaat ergens anders zitten.
+  await tomaszLeaves(id);
+}
+
+// Vervolg van B (en B2): Tomasz geeft het op en gaat ergens anders zitten; Marco zegt nog iets.
+async function tomaszLeaves(id) {
   lookAtFn(faceOf(tomasz), 2.2);
   tomasz.lookTarget = tablePoint('tomasz', 0, 0.2);
   await say(id, 'b2', [[1.3, () => (tomasz.lookTarget = playerHead)]]);
@@ -756,17 +878,18 @@ async function branchB(id) {
   guard(id);
 }
 
-async function branchC(id) {
-  // De speler scheldt terug. Dennis schrikt en wordt boos; hij staat op.
+async function branchC(id, key = 'C') {
+  // De speler scheldt terug (C2: na eerst rustig 'stop'). Dennis schrikt en wordt boos; hij staat op.
   later(id, 0.5, () => {
     dennis.react('recoil');
     dennis.mood = {};
   });
   // De hele tafel schrikt, niet tegelijk.
   stagger(id, [marco, tomasz], (p) => p.react('recoil'), 0.5, 0.9);
-  await playerSays(id, 'C');
+  await playerSays(id, key);
   dennis.angerTarget = 0.95;
   dennis.lean = 0;
+  dennis.armPose = null; // C2: de armen gaan los (hij zat er na x1 met de armen over elkaar)
   lookAtFn(faceOf(dennis), 3);
   later(id, 0.9, () => flinch(V(0, 0.07), 0.6, false));
   // Marco en Tomasz draaien mee zodra Dennis begint op te staan (niet tegelijk).

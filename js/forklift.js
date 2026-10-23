@@ -216,6 +216,7 @@ export class Forklift {
   setSpeedInstant(v) {
     this.speed = v;
     this.prevSpeed = v;
+    this.pitch = this.pitchVel = 0;
   }
 
   update(dt) {
@@ -254,8 +255,15 @@ export class Forklift {
     const targetPitch = clamp(-acc * 0.012, -0.06, 0.06);
     const k = 70;
     const c = 7;
-    this.pitchVel += (k * (targetPitch - this.pitch) - c * this.pitchVel) * dt;
-    this.pitch += this.pitchVel * dt;
+    // In kleine stapjes: een lange frame (tab even weg, zware reset) maakte de veer instabiel, en
+    // dan liep de kanteling op tot oneindig (NaN in de positie van de heftruck en zijn geluid).
+    const n = Math.min(20, Math.ceil(dt / (1 / 60)));
+    const h = n > 0 ? dt / n : 0;
+    for (let i = 0; i < n; i++) {
+      this.pitchVel += (k * (targetPitch - this.pitch) - c * this.pitchVel) * h;
+      this.pitch += this.pitchVel * h;
+    }
+    if (!Number.isFinite(this.pitch) || !Number.isFinite(this.pitchVel)) this.pitch = this.pitchVel = 0;
     this.body.rotation.x = this.pitch;
     this.mast.rotation.x = this.pitch * 1.4;
 

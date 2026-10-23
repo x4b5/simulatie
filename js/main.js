@@ -282,6 +282,7 @@ async function exitForklift(id) {
   guard(id);
 
   // 3. Opstaan (motion capture) met de rechterhand aan de voorste stijl.
+  m.exitStage = 3;
   const post = flLocal(0.5, 1.55, 0.5);
   m.setAim('r', post);
   const step = flLocal(0.62, 0.345, 0.18);
@@ -415,7 +416,9 @@ async function runIntro(id) {
   marco.pant = 1;
   marco.exitStage = 0;
   const exit = detach(exitForklift(id));
-  await until(() => marco.exitStage >= 4 || id !== runId);
+  await until(() => marco.exitStage >= 3 || id !== runId);
+  guard(id);
+  await wait(0.45); // halverwege het opstaan begint hij al te praten
   guard(id);
   lookAtFn(marcoHead, 4);
   let walk = null;

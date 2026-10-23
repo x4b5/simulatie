@@ -196,6 +196,8 @@ const KEEP = {
 };
 
 // Gebaren (oude API-namen) → animatieclips.
+// Houdingen met praatloops waarin de hand soms tot naast het hoofd komt (zie de handbegrenzing).
+const HAND_CAP_POSES = new Set(['armsOut', 'shout', 'firm']);
 const POSE_CLIPS = {
   relaxed: ['idle', 'breathe'],
   angry: ['listenAngry', 'idleAngry'],
@@ -1800,6 +1802,25 @@ export class Human {
         if (st.x > 0.005 && this._lastAim?.[s]) G[s] = { p: this._lastAim[s], w: Math.max(0, st.x) * 0.85, cock: 0, point: false };
       }
     }
+    // De mocap-praatloops (boos, armen uit) zetten soms een open hand naast het hoofd: dat leest
+    // als zwaaien of bellen. Komt de pols boven schouderhoogte zonder dat er een gebaar loopt, dan
+    // trekt een zachte IK hem terug naar onder de schouder.
+    if (HAND_CAP_POSES.has(this.handPose)) {
+      for (const s of ['l', 'r']) {
+        if (G[s]) continue;
+        const a = this.bones.arm[s];
+        a.up.getWorldPosition(_v);
+        a.hand.getWorldPosition(_v2);
+        const over = _v2.y - (_v.y - 0.06);
+        const cap = (this._cap ||= { l: { x: 0, v: 0 }, r: { x: 0, v: 0 }, p: { l: new THREE.Vector3(), r: new THREE.Vector3() } });
+        spring(cap[s], THREE.MathUtils.clamp(over / 0.12, 0, 1), 9, 1, dt);
+        if (cap[s].x > 0.02) {
+          cap.p[s].copy(_v2);
+          cap.p[s].y = _v.y - 0.32;
+          G[s] = { p: cap.p[s], w: Math.min(1, cap[s].x) * 0.55, cock: 0, point: false };
+        }
+      }
+    }
     // Bovenrug en schouders doen mee met het gebaar (en de aanloop: eerst iets de andere kant op).
     {
       let yaw = 0;
@@ -2242,8 +2263,8 @@ export class Human {
     set('sneerL', A * 0.3 + shoutNow * 0.25 + L.nose);
     set('sneerR', A * 0.3 + shoutNow * 0.25 + L.nose);
     // Lachen: ogen samengeknepen en wangen omhoog (de 'Duchenne'-lach), tanden zichtbaar.
-    set('squintL', A * 0.32 + angryEmph * 0.2 + LM * 0.7 + L.squint);
-    set('squintR', A * 0.32 + angryEmph * 0.2 + LM * 0.7 + L.squint);
+    set('squintL', A * 0.32 + angryEmph * 0.2 + LM * 0.55 + L.squint);
+    set('squintR', A * 0.32 + angryEmph * 0.2 + LM * 0.55 + L.squint);
     set('cheekSquintL', shoutNow * 0.3 + E.smile * 0.4 + LM * 0.9 + L.cheekL);
     set('cheekSquintR', shoutNow * 0.3 + E.smile * 0.4 + LM * 0.9 + L.cheekR);
     // Tanden ontbloten bij schreeuwen, gespannen lippen als hij zwijgt.

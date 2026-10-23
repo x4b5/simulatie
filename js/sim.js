@@ -209,16 +209,16 @@ export function lookFrame(heads, rate = 2) {
         ymax = Math.max(ymax, r);
         esum += Math.atan2(h.y - _fh.y, Math.hypot(dx, dz));
       }
-      if (n === 1 || ymax - ymin + 0.3 <= maxH * 0.86) break;
+      if (n === 1 || ymax - ymin + 0.22 <= maxH * 0.92) break;
       n--;
     }
     const pts = all.slice(0, n);
     const yaw = y0 + (ymin + ymax) / 2;
-    const spread = ymax - ymin + 0.3; // plus een hoofdbreedte aan beide kanten
+    const spread = ymax - ymin + 0.22; // plus een halve hoofdbreedte aan beide kanten
     const base = baseFov();
     const hfovBase = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(base) / 2) * aspect);
     let vfov = base;
-    if (spread > hfovBase * 0.86) vfov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(spread / 0.86 / 2) / aspect));
+    if (spread > hfovBase * 0.92) vfov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(spread / 0.92 / 2) / aspect));
     vfov = Math.min(vfov, maxV);
     look.fovWant = vfov;
     // Vrije strook: onder de bovenbalk, boven het keuzepaneel (of 55% van de hoogte).

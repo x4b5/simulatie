@@ -36,6 +36,10 @@ def main():
             gdb = max(-10.0, min(14.0, gdb))
             table[vid] = {'lufs': lufs, 'peak': peak, 'db': round(gdb, 2), 'gain': round(10 ** (gdb / 20), 3)}
             print(f'{f:28s} {lufs:6.1f} LUFS  piek {peak:6.1f} dB  -> {gdb:+5.1f} dB  ({lufs + gdb:6.1f} LUFS)')
+        # Controle: de drie antwoorden van de speler mogen na correctie hooguit 3 LU verschillen.
+        res = [table[k]['lufs'] + table[k]['db'] for k in ('pA', 'pB', 'pC') if k in table]
+        if res and max(res) - min(res) > 3:
+            print(f'LET OP: {d}: antwoorden pA/pB/pC verschillen {max(res) - min(res):.1f} LU (> 3)')
         with open(os.path.join(d, 'gain.json'), 'w') as fh:
             json.dump({k: v['gain'] for k, v in table.items()}, fh, indent=1)
 

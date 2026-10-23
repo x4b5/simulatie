@@ -133,6 +133,14 @@ const faceOf = (p) => (v) => {
 const tablePoint = (name, lx = 0, lz = 0.45) => seatPoint(SEATS[name], lx, lz, TABLE_H);
 
 // Kijkdoel tussen de hoofden van een paar personen, `dy` lager.
+// Punt op afstand d vóór de borst van a, richting het hoofd van b, op hoogte y.
+function towardFrom(a, b, d, y) {
+  const from = a.bones.spine2.getWorldPosition(new THREE.Vector3());
+  const to = b.headWorld(new THREE.Vector3());
+  const dir = to.sub(from).setY(0).normalize();
+  return from.addScaledVector(dir, d).setY(y);
+}
+
 function groupLook(people, dy) {
   return (v) => {
     v.set(0, 0, 0);
@@ -523,7 +531,8 @@ async function runIntro(id) {
   dennis.lean = 0.12;
   dennis.mood = { smile: 0.35 };
   await say(id, 'd1', [
-    [1.6, () => dennis.jab('l', headOf(tomasz)(new THREE.Vector3()).setY(1.0), 0.7)],
+    // Kleine uitnodigende handbeweging richting Tomasz (geen gestrekte robotarm).
+    [1.6, () => dennis.jab('l', towardFrom(dennis, tomasz, 0.38, 1.1), 0.7, 0.35)],
     [3.4, () => (dennis.lookTarget = headOf(tomasz))],
   ]);
 
@@ -754,8 +763,10 @@ async function branchC(id) {
   // Prikgebaar: echt naar de speler wijzen, niet losjes omhoog.
   await say(id, 'c1', [
     [0.0, () => dennis.setHands('firm')],
-    [0.4, () => dennis.jab('r', playerChest(new THREE.Vector3()), 0.95, 0.85)],
-    [1.8, () => dennis.jab('r', playerChest(new THREE.Vector3()), 0.85, 0.85)],
+    // Prik naar de speler, die zit: het doel ligt lager, zodat de arm schuin omlaag wijst en
+    // niet voor Dennis' eigen gezicht langs gaat.
+    [0.4, () => dennis.jab('r', playerChest(new THREE.Vector3()).add(_c.set(0, -0.22, 0)), 0.95, 0.75)],
+    [1.8, () => dennis.jab('r', playerChest(new THREE.Vector3()).add(_c.set(0, -0.22, 0)), 0.85, 0.75)],
   ]);
   dennis.setHands('angry');
 

@@ -6,7 +6,7 @@ import { UI, LINES, CHOICES, OUTCOMES } from './i18n-kantine.js';
 import { CANTEEN_CHOICE_ICON } from './icons.js';
 import {
   V, renderer, scene, rig, audio, S, simT, runId, later, waitReal, wait, until, tween, guard, detach, ease, shortAngle,
-  look, lookAtFn, lookDir, lookFrame, snapLook, flinch, playerHead, playerChest, say, playerSays,
+  look, lookAtFn, lookDir, lookFrame, lookSettled, snapLook, flinch, playerHead, playerChest, say, playerSays,
   stopVoice, hideSub, setPhase, goChoice, start,
 } from './sim.js';
 
@@ -786,8 +786,9 @@ async function branchC(id) {
   ]);
   dennis.setHands('angry');
 
-  // Marco sust: handen omhoog. De anderen in de kantine kijken om.
-  lookAtFn(faceOf(marco), 2.6);
+  // Marco sust: handen omhoog. De anderen in de kantine kijken om. Dennis staat naast hem:
+  // samen in beeld (Marco eerst), zodat Dennis' hoofd niet half boven de rand valt.
+  lookFrame(() => [marco.headWorld(new THREE.Vector3()), dennis.headWorld(new THREE.Vector3())], 2.6);
   marco.armPose = 'calm';
   marco.lookTarget = headOf(dennis);
   await say(id, 'c2', [
@@ -799,10 +800,12 @@ async function branchC(id) {
   guard(id);
   marco.armPose = null;
 
-  // Tomasz heeft er genoeg van.
+  // Tomasz heeft er genoeg van. Hij begint pas als hij in beeld is.
   lookAtFn(faceOf(tomasz), 2.4);
   tomasz.angerTarget = 0.3;
   tomasz.lookTarget = headOf(dennis);
+  await lookSettled(0.14, 1.8);
+  guard(id);
   await say(id, 'c3', [[1.4, () => (tomasz.lookTarget = playerHead)]]);
   tomasz.clearForced();
   tomasz.lookTarget = null;

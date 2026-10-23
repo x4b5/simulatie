@@ -59,6 +59,8 @@ export const ICONS = {
   warn: svg('<path d="M24 5L44 41H4z"/><path d="M24 18v11"/><circle cx="24" cy="34.5" r="1.6" fill="currentColor"/>'),
   // Spreekballon met uitroepteken (iets stelligs zeggen)
   speechBang: svg('<path d="M8 7h32a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H22l-9 8v-8H8a4 4 0 0 1-4-4V11a4 4 0 0 1 4-4z"/><path d="M24 13v9"/><circle cx="24" cy="27" r="1.6" fill="currentColor"/>'),
+  // Wiel met rempedaal (rolsteiger op de rem)
+  brake: svg('<circle cx="18" cy="32" r="9"/><circle cx="18" cy="32" r="2.5" fill="currentColor"/><path d="M18 23V8M18 8h12"/><path d="M28 30h12v6H28z" fill="currentColor"/><path d="M34 30v-6"/>'),
   // Klembord (melden)
   report: svg('<rect x="10" y="7" width="28" height="37" rx="3"/><path d="M18 7V4h12v3"/><path d="M16 18h16M16 25h16M16 32h9"/>'),
 };
@@ -68,5 +70,5 @@ export const ICONS = {
 // 'goede' antwoord en geen boos gezicht voor het 'foute'.
 export const CHOICE_ICON = { A: 'warn', B: 'hurry', C: 'hand' };
 export const CANTEEN_CHOICE_ICON = { A: 'hand', B: 'laugh', C: 'speechBang' };
-export const HENK_CHOICE_ICON = { A: 'ladder', B: 'boxHands', C: 'report' };
+export const HENK_CHOICE_ICON = { A: 'ladder', B: 'boxHands', C: 'speechBang' };
 export const MOOD_ICON = { calm: 'faceCalm', tense: 'faceTense', escalated: 'faceAngry' };

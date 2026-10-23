@@ -1807,14 +1807,16 @@ export class Human {
     // trekt een zachte IK hem terug naar onder de schouder.
     if (HAND_CAP_POSES.has(this.handPose)) {
       for (const s of ['l', 'r']) {
-        if (G[s]) continue;
+        // Ook tijdens de aanloop en het ontspannen van een prik (gebaar nog zwak): dan kan de
+        // mocap de hand anders voor het eigen gezicht zetten.
+        if (G[s] && (this.aim[s] || G[s].w >= 0.3)) continue;
         const a = this.bones.arm[s];
         a.up.getWorldPosition(_v);
         a.hand.getWorldPosition(_v2);
         const over = _v2.y - (_v.y - 0.06);
         const cap = (this._cap ||= { l: { x: 0, v: 0 }, r: { x: 0, v: 0 }, p: { l: new THREE.Vector3(), r: new THREE.Vector3() } });
         spring(cap[s], THREE.MathUtils.clamp(over / 0.12, 0, 1), 9, 1, dt);
-        if (cap[s].x > 0.02) {
+        if (cap[s].x > 0.02 && (!G[s] || G[s].w < Math.min(1, cap[s].x) * 0.55)) {
           cap.p[s].copy(_v2);
           cap.p[s].y = _v.y - 0.32;
           G[s] = { p: cap.p[s], w: Math.min(1, cap[s].x) * 0.55, cock: 0, point: false };

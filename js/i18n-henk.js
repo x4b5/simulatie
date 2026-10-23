@@ -30,6 +30,55 @@ export const UI = {
     tr: 'Senden yardım istiyor. Ne dersin?',
     uk: 'Він просить тебе допомогти. Що ти скажеш?',
   },
+  // Vertellersregels in tak A (geen stem, in de ondertitelbalk).
+  nA1: {
+    nl: 'Henk komt naar beneden. Jij haalt de trap.',
+    en: 'Henk comes down. You get the ladder.',
+    ar: 'ينزل هنك. وأنت تُحضر السلّم.',
+    pl: 'Henk schodzi. Ty przynosisz drabinę.',
+    tr: 'Henk aşağı iniyor. Sen merdiveni getiriyorsun.',
+    uk: 'Генк злазить. Ти приносиш драбину.',
+  },
+  nBrake: {
+    nl: 'Klik. De trap staat op de rem.',
+    en: 'Click. The ladder brake is on.',
+    ar: 'طق. فرامل السلّم مشدودة.',
+    pl: 'Klik. Drabina stoi na hamulcu.',
+    tr: 'Klik. Merdivenin freni kilitli.',
+    uk: 'Клац. Драбина на гальмі.',
+  },
+  nClimb: {
+    nl: 'Henk gaat de trap op. Hij houdt de leuning vast.',
+    en: 'Henk goes up the ladder. He holds the railing.',
+    ar: 'يصعد هنك السلّم. يمسك الدرابزين.',
+    pl: 'Henk wchodzi po drabinie. Trzyma się poręczy.',
+    tr: 'Henk merdivene çıkıyor. Korkuluğu tutuyor.',
+    uk: 'Генк піднімається драбиною. Він тримається за поручні.',
+  },
+  nGive: {
+    nl: 'Henk geeft de doos aan. Jij pakt hem aan.',
+    en: 'Henk hands down the box. You take it.',
+    ar: 'يناولك هنك الصندوق. وأنت تأخذه.',
+    pl: 'Henk podaje karton. Ty go odbierasz.',
+    tr: 'Henk kutuyu uzatıyor. Sen alıyorsun.',
+    uk: 'Генк подає коробку. Ти її береш.',
+  },
+  nDown: {
+    nl: 'Henk klimt naar beneden.',
+    en: 'Henk climbs down.',
+    ar: 'ينزل هنك.',
+    pl: 'Henk schodzi na dół.',
+    tr: 'Henk aşağı iniyor.',
+    uk: 'Генк злазить униз.',
+  },
+  nRail: {
+    nl: 'Henk heeft zijn handen vrij. Hij houdt de leuning vast.',
+    en: 'Henk has his hands free. He holds the railing.',
+    ar: 'يدا هنك حرّتان. يمسك الدرابزين.',
+    pl: 'Henk ma wolne ręce. Trzyma się poręczy.',
+    tr: 'Henk’in elleri boş. Korkuluğu tutuyor.',
+    uk: 'У Генка вільні руки. Він тримається за поручні.',
+  },
   henk: {
     nl: 'Henk, orderpicker',
     en: 'Henk, order picker',
@@ -180,6 +229,38 @@ export const CHOICES = {
   },
 };
 
+// Op de keuzekaart staat bij A alleen de kern, met de andere twee delen als pictogram-chips (de
+// lengte van de tekst mag het antwoord niet verraden). De hele zin staat in de ondertitel.
+export const CHOICE_SHORT = {
+  A: {
+    text: {
+      nl: 'Henk, kom even naar beneden?',
+      en: 'Henk, could you come down?',
+      ar: 'هنك، هل تنزل قليلًا؟',
+      pl: 'Henku, zejdziesz na chwilę?',
+      tr: 'Henk, bir aşağı iner misin?',
+      uk: 'Генку, злізеш на хвилинку?',
+    },
+    chips: [
+      { icon: 'faceTense', text: { nl: 'ik schrik', en: 'it scares me', ar: 'أنا أخاف', pl: 'boję się', tr: 'korkuyorum', uk: 'мені страшно' } },
+      { icon: 'ladder', text: { nl: 'ik haal de trap', en: "I'll get the ladder", ar: 'سأحضر السلّم', pl: 'przyniosę drabinę', tr: 'merdiveni getiririm', uk: 'я принесу драбину' } },
+    ],
+  },
+};
+
+// Pictogrammen op de kaartjes van de nabespreking (naast de tekst).
+export const CARD_PICS = {
+  A: {
+    what: [
+      { icon: 'ladder', text: { nl: 'trap', en: 'ladder', ar: 'السلّم', pl: 'drabina', tr: 'merdiven', uk: 'драбина' } },
+      { icon: 'brake', text: { nl: 'rem erop', en: 'brake on', ar: 'الفرامل', pl: 'hamulec', tr: 'fren', uk: 'гальмо' } },
+    ],
+  },
+  C: {
+    why: [{ icon: 'report', text: { nl: 'melden = goed', en: 'reporting = good', ar: 'التبليغ = جيد', pl: 'zgłaszanie = dobrze', tr: 'bildirmek = iyi', uk: 'повідомити = добре' } }],
+  },
+};
+
 // Nabespreking per keuze: korte kaarten (taalniveau A2), elk met een pictogram.
 export const OUTCOMES = {
   A: {
@@ -187,12 +268,12 @@ export const OUTCOMES = {
     moodLabel: BASE_OUTCOMES.A.moodLabel,
     title: { nl: 'Je zegt wat je ziet', en: 'You say what you see', ar: 'تقول ما تراه', pl: 'Mówisz, co widzisz', tr: 'Gördüğünü söylersin', uk: 'Ти кажеш, що бачиш' },
     what: {
-      nl: 'Henk komt naar beneden. Samen halen jullie de trap.',
-      en: 'Henk comes down. Together you get the ladder.',
-      ar: 'ينزل هنك. تُحضران السلّم معًا.',
-      pl: 'Henk schodzi na dół. Razem przynosicie drabinę.',
-      tr: 'Henk aşağı iner. Merdiveni birlikte getirirsiniz.',
-      uk: 'Генк злазить. Разом ви приносите драбину.',
+      nl: 'Henk komt naar beneden. Jij haalt de trap en zet hem op de rem. Henk geeft de doos aan.',
+      en: 'Henk comes down. You get the ladder and put the brake on. Henk hands you the box.',
+      ar: 'ينزل هنك. تُحضر السلّم وتشغّل الفرامل. يناولك هنك الصندوق.',
+      pl: 'Henk schodzi na dół. Przynosisz drabinę i zaciągasz hamulec. Henk podaje ci karton.',
+      tr: 'Henk aşağı iner. Merdiveni getirir ve frenini kilitlersin. Henk kutuyu sana uzatır.',
+      uk: 'Генк злазить. Ти приносиш драбину і ставиш її на гальмо. Генк подає тобі коробку.',
     },
     why: {
       nl: 'Je zegt wat jij voelt: ik schrik. Je geeft een oplossing. Henk voelt zich niet aangevallen.',
@@ -203,20 +284,20 @@ export const OUTCOMES = {
       uk: 'Ти кажеш, що відчуваєш: мені страшно. Ти пропонуєш рішення. Генк не відчуває нападу.',
     },
     tip: {
-      nl: 'Zeg: ik zie… ik schrik… zullen we…?',
-      en: 'Say: I see… it scares me… shall we…?',
-      ar: 'قل: أرى… أنا أخاف… هل يمكن أن…؟',
-      pl: 'Powiedz: widzę… boję się… może…?',
-      tr: 'De ki: görüyorum… korkuyorum… şöyle yapalım mı…?',
-      uk: 'Скажи: я бачу… мені страшно… давай…?',
+      nl: 'Zeg 3 dingen: kom naar beneden. Ik schrik. Ik haal de trap.',
+      en: "Say 3 things: come down. It scares me. I'll get the ladder.",
+      ar: 'قل 3 أشياء: انزل. أنا أخاف. سأحضر السلّم.',
+      pl: 'Powiedz 3 rzeczy: zejdź na dół. Boję się. Przyniosę drabinę.',
+      tr: 'Üç şey söyle: aşağı in. Korkuyorum. Merdiveni getiriyorum.',
+      uk: 'Скажи 3 речі: злізь униз. Мені страшно. Я принесу драбину.',
     },
     quote: {
-      nl: 'Henk, kom even naar beneden. Ik haal de trap.',
-      en: "Henk, come down for a moment. I'll get the ladder.",
-      ar: 'هنك، انزل قليلًا. سأحضر السلّم.',
-      pl: 'Henku, zejdź na chwilę. Przyniosę drabinę.',
-      tr: 'Henk, bir aşağı in. Merdiveni getiriyorum.',
-      uk: 'Генку, злізь на хвилинку. Я принесу драбину.',
+      nl: 'Henk, kom even naar beneden. Ik schrik. Ik haal de trap.',
+      en: "Henk, come down for a moment. It scares me. I'll get the ladder.",
+      ar: 'هنك، انزل قليلًا. أنا أخاف. سأحضر السلّم.',
+      pl: 'Henku, zejdź na chwilę. Boję się. Przyniosę drabinę.',
+      tr: 'Henk, bir aşağı in. Korkuyorum. Merdiveni getiriyorum.',
+      uk: 'Генку, злізь на хвилинку. Мені страшно. Я принесу драбину.',
     },
     q: {
       nl: 'Wat doe jij als een collega iets gevaarlijks doet?',
@@ -275,7 +356,7 @@ export const OUTCOMES = {
   C: {
     mood: 'escalated',
     moodLabel: BASE_OUTCOMES.C.moodLabel,
-    title: { nl: 'Je valt hem aan', en: 'You attack him', ar: 'تهاجمه', pl: 'Atakujesz go', tr: 'Ona saldırırsın', uk: 'Ти нападаєш на нього' },
+    title: { nl: 'Je dreigt', en: 'You threaten', ar: 'أنت تهدّد', pl: 'Grozisz', tr: 'Tehdit edersin', uk: 'Ти погрожуєш' },
     what: {
       nl: 'Henk wordt boos en blijft staan. Sandra moet helpen.',
       en: 'Henk gets angry and stays up there. Sandra has to help.',
@@ -285,12 +366,12 @@ export const OUTCOMES = {
       uk: 'Генк злиться й лишається нагорі. Сандрі доводиться втрутитися.',
     },
     why: {
-      nl: 'Je had gelijk: het was gevaarlijk. Maar dreigen maakt Henk boos. Dan luistert hij niet.',
-      en: "You were right: it was dangerous. But threats make Henk angry. Then he doesn't listen.",
-      ar: 'كنت محقًّا: كان الأمر خطيرًا. لكن التهديد يُغضب هنك. وعندها لا يستمع.',
-      pl: 'Miałeś rację: to było niebezpieczne. Ale groźby złoszczą Henka. Wtedy on nie słucha.',
-      tr: 'Haklıydın: tehlikeliydi. Ama tehdit Henk’i sinirlendirir. O zaman dinlemez.',
-      uk: 'Ти мав рацію: це було небезпечно. Але погрози злять Генка. Тоді він не слухає.',
+      nl: 'Je had gelijk: het was gevaarlijk. Maar dreigen maakt Henk boos. Melden is goed. Maar zeg het eerst rustig tegen Henk.',
+      en: "You were right: it was dangerous. But threats make Henk angry. Reporting is good. But first tell Henk calmly.",
+      ar: 'كنت محقًّا: كان الأمر خطيرًا. لكن التهديد يُغضب هنك. التبليغ أمر جيد. لكن قل ذلك لهنك بهدوء أولًا.',
+      pl: 'Miałeś rację: to było niebezpieczne. Ale groźby złoszczą Henka. Zgłaszanie jest dobre. Ale najpierw powiedz to spokojnie Henkowi.',
+      tr: 'Haklıydın: tehlikeliydi. Ama tehdit Henk’i sinirlendirir. Bildirmek iyidir. Ama önce Henk’e sakince söyle.',
+      uk: 'Ти мав рацію: це було небезпечно. Але погрози злять Генка. Повідомляти — це добре. Але спершу спокійно скажи Генкові.',
     },
     tip: {
       nl: 'Praat over het gevaar, niet over de persoon. Dreig niet.',

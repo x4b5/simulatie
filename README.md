@@ -30,8 +30,9 @@ de speler uit drie reacties en ziet hij wat er daarna gebeurt.
 - **Voorlezen:** op het startscherm, bij de keuzevraag en op elk kaartje van de nabespreking staat
   een knop *Luister*. Die leest de tekst voor met de spraak van de browser (Web Speech API): eerst
   het Nederlands, daarna de vertaling als de browser een stem voor die taal heeft. Wie één kaartje
-  laat voorlezen, krijgt de volgende kaartjes vanzelf voorgelezen. Heeft de browser geen
-  Nederlandse stem, dan zijn de knoppen er niet.
+  laat voorlezen, krijgt de volgende kaartjes vanzelf voorgelezen; stop je het voorlezen zelf (of
+  begin je opnieuw), dan houdt dat op. Heeft de browser geen Nederlandse stem maar wel een stem voor
+  de vertaaltaal, dan wordt alleen de vertaling voorgelezen; zonder enige stem zijn de knoppen er niet.
 - **Even luid:** de stemopnames worden bij het afspelen gelijkgetrokken (`gain.json` per map, gemaakt
   met `python3 tools/loudness.py`): de drie antwoorden van de speler klinken precies even luid, zodat
   het volume niet verraadt welk antwoord 'goed' is; schreeuwen blijft luider dan fluisteren, maar
@@ -162,9 +163,13 @@ Intro ── de speler loopt met zijn scanner door orderpickgang 12. Een metalen
    ▼
 Keuze (tijd staat stil, Henk kijkt naar de speler)
    ├─ A "Henk, kom even naar beneden? Ik schrik als ik je daar zie staan. Ik haal de trap wel."
+   │       (op de keuzekaart alleen "Henk, kom even naar beneden?" met twee pictogram-chips
+   │       'ik schrik' en 'ik haal de trap', zodat de lengte het antwoord niet verraadt)
    │       → Henk moppert ("Ik doe dit al vijfentwintig jaar") maar klimt voorzichtig naar beneden.
-   │         De speler duwt de rolsteiger naar de stelling, Henk loopt ernaast mee terug. "Je hebt gelijk. Vorig jaar is Ahmed
-   │         zo gevallen." Henk klimt de steiger op en pakt de doos veilig.
+   │         De speler loopt meteen naar de rolsteiger en duwt hem naar de stelling, en zet hem op
+   │         de rem (klik, rood pedaal). "Je hebt gelijk. Vorig jaar is Ahmed zo gevallen." Henk
+   │         klimt de steiger op, pakt de doos en geeft hem laag aan; de speler staat naast de
+   │         treden (niet eronder) en neemt hem over. Henk houdt met twee handen de leuning vast.
    ├─ B "Ja hoor, geef maar."
    │       → de speler stapt onder de stelling, Henk reikt verder, de doos schuift weg en valt,
    │         Henks voet glijdt van de ligger (hartslag). "Haha… dat ging net goed." Marco komt
@@ -176,6 +181,13 @@ Keuze (tijd staat stil, Henk kijkt naar de speler)
    ▼
 Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten.
 ```
+
+- **Woorden en beeld:** de speler zegt "trap"; op de rolsteiger staat daarom een bordje TRAP.
+  De tip van A herhaalt precies de drie stukjes van de gesproken zin (kom naar beneden, ik schrik,
+  ik haal de trap). Kaart C heet "Je dreigt" en zegt erbij dat melden goed is, maar dat je het
+  eerst rustig tegen Henk zegt (pictogram klembord).
+- **Geen lange stiltes:** waar niemand praat (A: naar de steiger lopen, de rem) staat een korte
+  vertellersregel zonder stem in de ondertitelbalk (`narrate` in `js/sim.js`).
 
 - **Plek:** een orderpickgang voorin dezelfde hal als Bijna geraakt (`js/racking.js`): lage
   stellingen voor dozen en bakken met liggers op 0,5 – 0,95 – 2,15 – 3,3 m, draadroosters,

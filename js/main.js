@@ -434,8 +434,8 @@ async function runIntro(id) {
     [2.15, () => {
       marco.setAim('l', WALKWAY);
       marco.lookTarget = WALKWAY;
-      // Even meekijken naar het voetpad, maar Marco blijft in beeld (hooguit 50° naast hem).
-      lookAtFn((v) => glanceToward(v, marcoHead, WALKWAY, 0.87), 2.2);
+      // Even meekijken naar het voetpad, maar Marco blijft ruim in beeld (hooguit 30° naast hem).
+      lookAtFn((v) => glanceToward(v, marcoHead, WALKWAY, 0.52), 2.2);
     }],
     [3.4, () => (marco.lookTarget = playerHead)],
     [3.55, () => lookAtFn(marcoHead, 2.5)],
@@ -611,7 +611,8 @@ async function branchC(id) {
   guard(id);
   marco.lookTarget = null;
   marco.setHands('relaxed');
-  marco.walkTo([[1.8, -11.0], [7.5, -15.8], [10.6, -16.6]], 1.3);
+  // Een pas achter Sandra en iets opzij (niet schouder aan schouder: dat leest als hand in hand).
+  marco.walkTo([[2.1, -10.6], [7.6, -15.0], [10.4, -15.9]], 1.12);
   lookAtFn(sandraHead, 2);
   // "Jullie allebei mee": Sandra kijkt even om naar de speler, en de speler loopt mee.
   later(id, 0.4, () => (sandra.lookTarget = playerHead));

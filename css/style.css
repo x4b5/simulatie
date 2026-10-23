@@ -623,3 +623,122 @@ body.can-read .c-head { padding-right: 140px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Pictogram-chips: een pictogram met 1-3 woorden (keuzekaart en nabespreking). */
+.pics { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 6px; }
+.pic {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px;
+  border-radius: 999px; background: rgba(255, 255, 255, 0.09); border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 0.95rem; font-weight: 700; line-height: 1.2;
+}
+.pic .ic { width: 22px; height: 22px; flex: none; color: var(--signal); }
+.pic-t { display: grid; }
+.pic-tr { color: var(--muted); font-weight: 400; font-size: 0.82rem; }
+.opt .pics { margin-top: 2px; }
+.subs[data-who="note"] .who { display: none; }
+.subs[data-who="note"] .nl { font-style: italic; }
+
+/* Kopje van een kaart: de vertaling ook vrij van de Luister-knop (Arabisch staat rechts). */
+@media (max-width: 760px) { .r-card-h-tr { padding-right: 52px; } }
+@media (max-height: 760px) and (min-width: 761px) { .r-card-h-tr { padding-right: 120px; } }
+
+/* Heel smalle telefoon (360 px): de bovenbalk past op één regel. */
+@media (max-width: 400px) {
+  .topbar { gap: 6px; }
+  .tb-badge { padding: 6px; letter-spacing: 0.06em; font-size: 13px; gap: 6px; }
+  .tb-tools { gap: 6px; }
+  .tb-lang { padding: 0 4px 0 6px; }
+  .tb-lang select { max-width: 4.8rem; }
+  .icon-btn { width: 40px; height: 40px; }
+}
+@media (max-width: 400px) and (max-height: 700px), (max-width: 760px) and (max-height: 680px) and (orientation: portrait) {
+  /* Kleine telefoon staand: startscherm compacter, zodat de startknop niet over de taalkeuze valt. */
+  .start-card { gap: 10px; }
+  .start h1 { font-size: 2.6rem; }
+  .story { gap: 6px; }
+  .story .ic { width: 42px; height: 42px; padding: 7px; }
+  .story .t-nl { font-size: 1.05rem; }
+  .note { padding: 6px 10px; }
+  .start-controls { gap: 8px; }
+  .field select { height: 42px; }
+  .start-buttons { bottom: -24px; }
+}
+
+/* Telefoon liggend (weinig hoogte): alles compact, de knoppen altijd in beeld. */
+@media (max-height: 440px) and (orientation: landscape) {
+  .start { align-items: flex-start; padding-top: 12px; padding-bottom: 0; }
+  .start-card { margin: 0 auto 0 0; width: min(44rem, 100%); gap: 8px; }
+  .start h1 { font-size: 2.2rem; }
+  .start h1 .t-tr { display: inline; margin: 0 0 0 10px; font-size: 0.45em; }
+  .start h1 .t-tr[dir="rtl"] { margin: 0 10px 0 0; }
+  .story { gap: 4px; }
+  .story .ic { width: 36px; height: 36px; padding: 6px; }
+  .story .t-nl { font-size: 1rem; }
+  .story .t-tr, .note .t-tr, .sound .t-tr { font-size: 0.85rem; }
+  .note { padding: 4px 10px; }
+  .note .ic { width: 24px; height: 24px; }
+  .sound { display: none; }
+  .other-ex { display: none; }
+  .start-controls { grid-template-columns: auto 1fr; align-items: end; gap: 8px 12px; }
+  .field { gap: 2px; }
+  .field select { height: 40px; }
+  .start-buttons {
+    position: sticky; bottom: 0; z-index: 1; padding: 8px 0 10px;
+    background: linear-gradient(180deg, rgba(11, 13, 16, 0) 0%, rgba(11, 13, 16, 0.96) 30%);
+  }
+  .start-controls > .vr-note { grid-column: 1 / -1; }
+
+  /* Keuze: drie kolommen, minimaal kopje, het paneel mag hoger worden en scrollen. */
+  .choice { max-height: calc(100% - 58px); padding: 6px 10px 8px; bottom: 4px; }
+  .c-head { margin-bottom: 4px; }
+  .c-title { font-size: 1.3rem; display: inline; }
+  .c-title-tr { display: inline; margin-left: 8px; font-size: 0.85rem; }
+  .c-sub, .c-sub-tr, .c-keys { display: none; }
+  .c-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .opt { padding: 6px 8px 46px; gap: 4px 8px; grid-template-columns: auto 1fr; }
+  .opt-pic { gap: 4px; }
+  .opt-icon { width: 28px; height: 28px; }
+  .opt-key { width: 22px; height: 22px; font-size: 0.95rem; }
+  .opt-nl { font-size: 0.95rem; line-height: 1.25; }
+  .opt-tr { font-size: 0.78rem; line-height: 1.25; }
+  .opt-listen { left: 8px; right: auto; top: auto; bottom: 6px; transform: none; min-height: 34px; padding: 4px 10px 4px 6px; }
+  .opt-listen .lbl { display: inline; font-size: 0.85rem; }
+  .pic { font-size: 0.8rem; padding: 2px 8px 2px 4px; }
+  .pic .ic { width: 18px; height: 18px; }
+  body.can-read .c-head { padding-right: 52px; }
+  .c-listen { padding: 6px; min-height: 36px; }
+  .c-listen .lbl { display: none; }
+
+  /* Nabespreking: kop op één regel, kaart compact, navigatie onderaan vast in beeld. */
+  .reflect { top: auto; bottom: 4px; max-height: calc(100% - 58px); left: auto; right: var(--gutter); width: min(46rem, calc(100% - 2 * var(--gutter))); }
+  .r-strip { height: 4px; }
+  .r-head { padding: 4px 14px 0; gap: 8px; }
+  .r-head > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+  .r-face { width: 26px; height: 26px; }
+  .r-mood { font-size: 11px; }
+  .r-title { font-size: 1.15rem; margin: 0; }
+  .r-title-tr { font-size: 0.85rem; margin: 0; }
+  .r-card { margin: 4px 14px 0; padding: 6px 10px; grid-template-columns: 30px minmax(0, 1fr); gap: 2px 10px; }
+  .r-card > * { grid-column: 2; }
+  .r-card > .r-card-ic { grid-column: 1; grid-row: 1 / span 2; width: 30px; height: 30px; margin: 0; }
+  .r-card > .r-quote, .r-card > .r-all { grid-column: 1 / -1; }
+  .r-card-h { font-size: 1.1rem; padding-right: 48px; }
+  .r-card-h-tr { padding-right: 48px; font-size: 0.8rem; }
+  .r-listen { top: 4px; right: 4px; min-height: 34px; padding: 4px 8px; }
+  .r-listen .lbl { display: none; }
+  .r-card-body { margin-top: 0 !important; font-size: 1rem; line-height: 1.3; }
+  .r-card-tr, .r-quote-tr, .r-all-tr { font-size: 14px !important; line-height: 1.3; padding-top: 0; padding-bottom: 0; }
+  .r-card-tr[dir="rtl"], .r-quote-tr[dir="rtl"], .r-all-tr[dir="rtl"] { font-size: 16px !important; line-height: 1.35; }
+  .r-quote, .r-all { margin-top: 4px; padding: 4px 10px; }
+  .r-quote-nl { font-size: 1rem; }
+  .r-quote-h { font-size: 0.8rem; }
+  .pics { margin-top: 2px; }
+  .r-nav {
+    position: sticky; bottom: 0; z-index: 1; margin-top: auto;
+    padding: 4px 14px 6px; background: var(--panel-solid, #15191d);
+  }
+  .r-arrow, .r-next { min-height: 40px; }
+  .r-actions { grid-template-columns: 1fr 1fr; padding: 0 14px 6px; gap: 6px; }
+  .r-actions .btn { min-height: 40px; padding: 4px 10px; font-size: 0.95rem; }
+  .subs { padding: 6px 12px 8px; }
+}

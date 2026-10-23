@@ -149,6 +149,14 @@ export const UI = {
     tr: 'Seçim anına geri dönüyoruz.',
     uk: 'Повертаємося до моменту вибору.',
   },
+  toChoice: {
+    nl: 'Je gaat naar het moment van de keuze.',
+    en: 'You go to the moment of choice.',
+    ar: 'تنتقل إلى لحظة الاختيار.',
+    pl: 'Przechodzisz do chwili wyboru.',
+    tr: 'Seçim anına geçiyorsun.',
+    uk: 'Ти переходиш до моменту вибору.',
+  },
   sayIt: { nl: 'Zo kun je het zeggen:', en: 'You can say it like this:', ar: 'يمكنك أن تقول:', pl: 'Możesz powiedzieć tak:', tr: 'Şöyle diyebilirsin:', uk: 'Можна сказати так:' },
   you: { nl: 'Jij', en: 'You', ar: 'أنت', pl: 'Ty', tr: 'Sen', uk: 'Ти' },
   marco: {

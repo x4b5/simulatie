@@ -165,6 +165,15 @@ export function lookDir(yaw, pitch, rate = 3) {
   look.fPitch = pitch;
   look.rate = rate;
 }
+// Wachten tot de blik (bijna) op het doel staat, hooguit `max` seconden: zo begint iemand pas
+// te praten als hij in beeld is (de camera draait in de takken met een begrensde snelheid).
+export async function lookSettled(tol = 0.12, max = 1.6) {
+  const t0 = simT;
+  await until(() => {
+    const [y, p] = desiredLook();
+    return (Math.abs(shortAngle(y - look.yaw)) < tol && Math.abs(p - look.pitch) < tol) || simT - t0 > max;
+  });
+}
 export function snapLook() {
   const [y, p] = desiredLook();
   look.yaw = y;
@@ -186,6 +195,7 @@ export function lookFrame(heads, rate = 2) {
     const aspect = camera.aspect || 1;
     const maxV = aspect < 1 ? 95 : 80;
     const maxH = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(maxV) / 2) * aspect);
+    const pad = aspect < 1 ? 0.4 : 0.22;
     // De eerste in de lijst is het belangrijkst; past de groep niet (staand scherm), dan vallen
     // de laatsten af.
     let n = all.length;
@@ -209,12 +219,12 @@ export function lookFrame(heads, rate = 2) {
         ymax = Math.max(ymax, r);
         esum += Math.atan2(h.y - _fh.y, Math.hypot(dx, dz));
       }
-      if (n === 1 || ymax - ymin + 0.22 <= maxH * 0.92) break;
+      if (n === 1 || ymax - ymin + pad <= maxH * 0.92) break;
       n--;
     }
     const pts = all.slice(0, n);
     const yaw = y0 + (ymin + ymax) / 2;
-    const spread = ymax - ymin + 0.22; // plus een halve hoofdbreedte aan beide kanten
+    const spread = ymax - ymin + pad; // plus een halve hoofdbreedte aan beide kanten (staand: ruimer)
     const base = baseFov();
     const hfovBase = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(base) / 2) * aspect);
     let vfov = base;
@@ -224,7 +234,13 @@ export function lookFrame(heads, rate = 2) {
     // Vrije strook: onder de bovenbalk, boven het keuzepaneel (of 55% van de hoogte).
     const H = window.innerHeight || 1;
     const top = 64;
-    const panel = choiceEl && !choiceEl.hidden ? choiceEl.getBoundingClientRect().top : H * 0.55;
+    // De bovenrand van het paneel hooguit 4× per seconde opmeten (getBoundingClientRect dwingt
+    // een layout af; elk beeld is op zwakke telefoons zonde).
+    const now = performance.now();
+    if (!lookFrame.c || now - lookFrame.c.t > 250 || lookFrame.c.H !== H) {
+      lookFrame.c = { t: now, H, top: choiceEl && !choiceEl.hidden ? choiceEl.getBoundingClientRect().top : null };
+    }
+    const panel = lookFrame.c.top ?? H * 0.55;
     const mid = (top + 0.9 * (Math.max(top + 40, panel) - top) * 0.5) / H; // iets boven het midden van de strook (kin vrij)
     const yNdc = 1 - 2 * mid;
     const pitch = esum / pts.length - Math.atan(yNdc * Math.tan(THREE.MathUtils.degToRad(vfov) / 2));
@@ -403,7 +419,12 @@ export async function playerSays(id, key) {
 
 const subEl = $('#subs');
 function speakerLabel(who) {
+  if (who === 'note') return [''];
   return pair(T.UI[who], S.lang);
+}
+// Een korte vertellersregel in de ondertitelbalk (geen stem), voor stukken zonder woorden.
+export function narrate(entry) {
+  showSub({ who: 'note', text: entry });
 }
 function showSub(sub) {
   S.sub = sub;
@@ -418,7 +439,7 @@ export function hideSub() {
 function renderSub() {
   const sub = S.sub;
   if (!sub) return;
-  const entry = sub.key ? T.LINES[sub.key].text : T.CHOICES[sub.choice];
+  const entry = sub.text || (sub.key ? T.LINES[sub.key].text : T.CHOICES[sub.choice]);
   const [nl, other] = pair(entry, S.lang);
   const [whoNl] = speakerLabel(sub.who);
   subEl.dataset.who = sub.who;
@@ -459,7 +480,7 @@ function renderSub() {
     showSentence(0);
   } else {
     subParts = null;
-    vrui.showSubtitle(whoNl, scn.subColors[sub.who], nl, other, langDir(S.lang));
+    vrui.showSubtitle(whoNl, scn.subColors[sub.who] || '#f2c500', nl, other, langDir(S.lang));
   }
 }
 
@@ -542,6 +563,7 @@ function pick(key) {
     setPhase('branch');
     await scn.branch(id, key);
     guard(id);
+    if (S.sub?.who === 'note') hideSub();
     showReflection(key);
   });
 }
@@ -561,7 +583,8 @@ function renderChoice() {
   const items = [];
   const listenNl = pair(UI.listen, S.lang)[0];
   for (const key of ['A', 'B', 'C']) {
-    const [nl, other] = pair(CHOICES[key], S.lang);
+    const short = T.CHOICE_SHORT?.[key];
+    const [nl, other] = pair(short ? short.text : CHOICES[key], S.lang);
     const wrap = document.createElement('div');
     wrap.className = 'opt-wrap';
     const b = document.createElement('button');
@@ -571,6 +594,7 @@ function renderChoice() {
     b.innerHTML = `<span class="opt-pic" aria-hidden="true"><span class="opt-icon ic">${ICONS[scn.choiceIcon[key]]}</span><span class="opt-key">${key}</span></span><span class="opt-body"><span class="opt-nl"></span><span class="opt-tr"></span></span>`;
     b.querySelector('.opt-nl').textContent = nl;
     setTr(b.querySelector('.opt-tr'), other);
+    if (short?.chips) b.querySelector('.opt-body').appendChild(picChips(short.chips));
     if (S.tried.has(key)) {
       const t = document.createElement('span');
       t.className = 'opt-tried';
@@ -593,10 +617,27 @@ function renderChoice() {
     });
     wrap.append(b, l);
     list.appendChild(wrap);
-    items.push({ letter: key, nl, other, tried: S.tried.has(key), onSelect: () => pick(key) });
+    const [fullNl, fullTr] = pair(CHOICES[key], S.lang); // VR: daar is ruimte voor de hele zin
+    items.push({ letter: key, nl: fullNl, other: fullTr, tried: S.tried.has(key), onSelect: () => pick(key) });
   }
   choiceEl.hidden = false;
   vrui.showChoices(title, sub, pair(UI.vrHint, S.lang)[0], items, langDir(S.lang), pair(UI.tried, S.lang)[0]);
+}
+
+// Kleine pictogram-chips (pictogram + 1-3 woorden), op de keuzekaart en in de nabespreking.
+function picChips(list) {
+  const row = document.createElement('span');
+  row.className = 'pics';
+  for (const c of list) {
+    const chip = document.createElement('span');
+    chip.className = 'pic';
+    const [nl, tr] = pair(c.text, S.lang);
+    chip.innerHTML = `<span class="ic">${ICONS[c.icon] || ''}</span><span class="pic-t"><span class="pic-nl"></span><span class="pic-tr"></span></span>`;
+    chip.querySelector('.pic-nl').textContent = nl;
+    setTr(chip.querySelector('.pic-tr'), tr);
+    row.appendChild(chip);
+  }
+  return row;
 }
 
 // Voorbeeld van een antwoord afspelen (eigen stem), los van de keuze.
@@ -604,7 +645,10 @@ let preview = null;
 async function previewChoice(key) {
   await ensureAudio();
   stopPreview();
-  const v = audio.ready && selfOut ? audio.voice(`p${key}`, selfOut) : null;
+  const rate = scn.previewRate?.[key];
+  let v = null;
+  if (audio.ready && selfOut && rate && scn.audioDir) v = audio.voiceMedia(`p${key}`, `${scn.audioDir}p${key}.mp3`, selfOut, rate);
+  if (!v) v = audio.ready && selfOut ? audio.voice(`p${key}`, selfOut) : null;
   if (!v) return;
   preview = v;
   const btn = choiceEl.querySelector(`.opt-listen[data-key="${key}"]`);
@@ -638,7 +682,11 @@ function ttsLoadVoices() {
   } catch (e) {
     tts.voices = [];
   }
-  document.body.classList.toggle('can-read', !!ttsVoice('nl'));
+  updateCanRead();
+}
+// Knoppen tonen als er een stem is voor het Nederlands óf voor de gekozen vertaaltaal.
+function updateCanRead() {
+  document.body.classList.toggle('can-read', !!(ttsVoice('nl') || (S.lang !== 'nl' && ttsVoice(S.lang))));
 }
 function ttsVoice(lang) {
   const want = (TTS_LANG[lang] || lang).toLowerCase();
@@ -735,12 +783,18 @@ function readStory(btn) {
 function readPrompt(btn) {
   readAloud(withTr([T.UI.prompt, T.UI.pickOne]), btn);
 }
-function readCard(btn) {
+function readCard(btn, auto = false) {
   if (S.phase !== 'reflect') return;
+  // Zelf stoppen terwijl er voorgelezen wordt = ook niet meer vanzelf voorlezen.
+  if (!auto && btn && tts.btn === btn) {
+    tts.auto = false;
+    stopReading();
+    return;
+  }
   tts.auto = true; // wie één keer laat voorlezen, krijgt de volgende kaarten ook voorgelezen
   const cards = reflectionCards(S.outcome);
   const c = cards[Math.min(S.card || 0, cards.length - 1)];
-  const entries = [c.head, c.body];
+  const entries = [c.head, c.body, ...(c.pics || []).map((p) => p.text)];
   if (c.quote) entries.push(T.UI.sayIt, c.quote);
   if (c.last && S.tried.size === 3) entries.push(T.UI.allTried);
   readAloud(withTr(entries), btn);
@@ -780,8 +834,8 @@ function reflectionCards(key) {
   const { UI } = T;
   const o = T.OUTCOMES[key];
   return [
-    { icon: 'eye', head: UI.what, body: o.what },
-    { icon: 'bulb', head: UI.why, body: o.why },
+    { icon: 'eye', head: UI.what, body: o.what, pics: T.CARD_PICS?.[key]?.what },
+    { icon: 'bulb', head: UI.why, body: o.why, pics: T.CARD_PICS?.[key]?.why },
     { icon: 'tip', head: UI.tip, body: o.tip, quote: o.quote },
     // Extra kaarten van een oefening (bijv. de kantine: "En als het over jou gaat?").
     ...(o.extra || []),
@@ -817,6 +871,8 @@ function renderReflection() {
   const [bNl, bTr] = pair(c.body, S.lang);
   q('.r-card-body').textContent = bNl;
   setTr(q('.r-card-tr'), bTr);
+  q('.r-card > .pics')?.remove();
+  if (c.pics) q('.r-card-tr').after(picChips(c.pics));
   const quote = q('.r-quote');
   quote.hidden = !c.quote;
   if (c.quote) {
@@ -858,7 +914,7 @@ function renderReflection() {
   if (tts.auto && !S.muted) {
     const at = S.card;
     setTimeout(() => {
-      if (S.phase === 'reflect' && S.card === at && !reflEl.hidden) readCard(q('.r-listen'));
+      if (S.phase === 'reflect' && S.card === at && !reflEl.hidden) readCard(q('.r-listen'), true);
     }, 600);
   }
 
@@ -873,6 +929,7 @@ function renderReflection() {
     { text: c.body.nl, size: 40, weight: 700, gap: 8 },
   ];
   if (tr(c.body)) sec.push({ text: tr(c.body), size: 28, color: '#aab3ae', gap: 8, dir });
+  if (c.pics) sec.push({ text: c.pics.map((p) => `• ${pair(p.text, S.lang)[0]}`).join('   '), size: 30, weight: 700, color: '#f2c500', gap: 10 });
   if (c.quote) {
     sec.push({ text: pair(UI.sayIt, S.lang)[0], size: 28, color: '#5fd48b', gap: 22 });
     sec.push({ text: `“${c.quote.nl}”`, size: 40, weight: 700, color: '#d9ffe6', gap: 4 });
@@ -886,7 +943,7 @@ function renderReflection() {
       ]
     : [{ label: `${pair(UI.next, S.lang)[0]}  →`, primary: true, onSelect: () => stepCard(1) }];
   if (n > 0) buttons.unshift({ label: `←  ${pair(UI.back, S.lang)[0]}`, onSelect: () => stepCard(-1) });
-  if (ttsVoice('nl')) buttons.push({ label: pair(UI.listen, S.lang)[0], onSelect: () => readCard(q('.r-listen')) });
+  if (ttsVoice('nl') || ttsVoice(S.lang)) buttons.push({ label: pair(UI.listen, S.lang)[0], onSelect: () => readCard(q('.r-listen')) });
   vrui.showReflection(sec, buttons, moodColor, dir);
 }
 
@@ -938,17 +995,31 @@ async function veil(on, msg = null) {
   const to = on ? 1 : 0;
   veilMesh.visible = true;
   const t0 = performance.now();
+  // De fade loopt mee met de renderlus (renderer.setAnimationLoop blijft in WebXR draaien, het
+  // requestAnimationFrame van het venster niet). Een setTimeout maakt hem in elk geval af.
+  if (veilAnim) veilAnim.done();
   await new Promise((res) => {
-    const step = () => {
+    const a = { done: null };
+    const tick = () => {
+      if (veilAnim !== a) return;
       const k = Math.min(1, (performance.now() - t0) / (VEIL_S * 1000));
       veilMesh.material.opacity = from + (to - from) * k;
-      if (k < 1) requestAnimationFrame(step);
-      else res();
+      if (k >= 1) a.done();
     };
-    step();
+    a.tick = tick;
+    a.done = () => {
+      if (veilAnim === a) veilAnim = null;
+      veilMesh.material.opacity = to;
+      clearTimeout(a.to);
+      res();
+    };
+    a.to = setTimeout(() => a.done(), VEIL_S * 1000 + 120);
+    veilAnim = a;
+    tick();
   });
-  if (!on) veilMesh.visible = false;
+  if (!on && veilMesh.material.opacity === 0) veilMesh.visible = false;
 }
+let veilAnim = null;
 
 function rewindToChoice(holdMsg) {
   run(async (id) => {
@@ -974,6 +1045,7 @@ function retry() {
 }
 
 function restart() {
+  tts.auto = false;
   hideReflection();
   hideChoice();
   run(async (id) => {
@@ -990,7 +1062,7 @@ function restart() {
 }
 
 function skipIntro() {
-  rewindToChoice(null);
+  rewindToChoice(T.UI.toChoice || null);
 }
 
 // ------------------------------------------------------------------
@@ -1014,6 +1086,7 @@ function renderStatic() {
 
 function setLang(code) {
   S.lang = code;
+  updateCanRead();
   try {
     localStorage.setItem('bg-lang', code);
   } catch (e) {
@@ -1238,8 +1311,16 @@ function updateCamera(dt) {
   const vmax = ((S.phase === 'branch' ? 65 : 120) * Math.PI) / 180;
   const k = 1 - Math.exp(-look.rate * dt);
   const lim = vmax * dt;
-  look.yaw += THREE.MathUtils.clamp(shortAngle(dy - look.yaw) * k, -lim, lim);
-  look.pitch += THREE.MathUtils.clamp((dp - look.pitch) * k, -lim, lim);
+  // De grens geldt voor de hele draai (schuin omhoog/opzij samen), niet per as.
+  let sy = shortAngle(dy - look.yaw) * k;
+  let sp = (dp - look.pitch) * k;
+  const step = Math.hypot(sy, sp);
+  if (step > lim) {
+    sy *= lim / step;
+    sp *= lim / step;
+  }
+  look.yaw += sy;
+  look.pitch += sp;
   if (simT - look.lastUser > 2.4) {
     look.uYaw *= Math.exp(-1.6 * dt);
     look.uPitch *= Math.exp(-1.6 * dt);
@@ -1295,6 +1376,7 @@ function adaptResolution(rawDt) {
 
 function loop() {
   const now = performance.now();
+  if (veilAnim) veilAnim.tick();
   if (!/dtmax/.test(location.search)) adaptResolution(Math.min(1, (now - last) / 1000));
   const dt = window.__simFreeze ? 0 : Math.min(DT_MAX, (now - last) / 1000);
   last = now;
@@ -1367,8 +1449,11 @@ function lightenShadows() {
     }
   });
   const lowQ = () => {
+    const changed = renderer.shadowMap.type !== THREE.PCFShadowMap;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     scene.traverse((n) => {
+      // Materialen opnieuw laten compileren, anders blijft de zachte schaduwshader staan.
+      if (changed && n.material) for (const m of [].concat(n.material)) m.needsUpdate = true;
       if (n.isLight && n.castShadow && n.shadow.mapSize.x > 1024) {
         n.shadow.mapSize.set(1024, 1024);
         n.shadow.map?.dispose();
@@ -1424,12 +1509,13 @@ export async function start(scenario) {
   checkVR();
 
   // Luidheidstabel per opname (tools/loudness.py); zonder tabel klinkt alles zoals opgenomen.
-  fetch(`${scenario.audioDir}gain.json`)
+  // Ook de tabel hoort bij het laden: de eerste regel klinkt dan meteen gecorrigeerd.
+  const gains = fetch(`${scenario.audioDir}gain.json`)
     .then((r) => (r.ok ? r.json() : null))
     .then((g) => (audio.gains = g || {}))
     .catch(() => (audio.gains = {}));
   const voiceIds = [...Object.keys(T.LINES), 'pA', 'pB', 'pC'];
-  audioPrefetch = Promise.all(voiceIds.map((id) => audio.prefetch(id, `${scenario.audioDir}${id}.mp3`)));
+  audioPrefetch = Promise.all([gains, ...voiceIds.map((id) => audio.prefetch(id, `${scenario.audioDir}${id}.mp3`))]);
   await audioPrefetch;
   const btn = $('#btn-start');
   btn.disabled = false;

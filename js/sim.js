@@ -4,7 +4,7 @@ import { AudioEngine } from './audio.js';
 import { VRUI } from './vrui.js';
 import { LANGS, pair, langDir } from './i18n.js';
 import { ICONS, MOOD_ICON } from './icons.js';
-import { LIFE } from './human.js';
+import { LIFE, LOW_END, LOADING } from './human.js';
 
 // Gedeeld raamwerk voor de oefeningen ("Bijna geraakt", "Grap in de kantine"):
 // renderer en camera (first person), sequencer in simulatietijd, spreken met lipsync en
@@ -552,6 +552,15 @@ export function setPhase(p) {
 // Twee keuzemomenten. Keuze 1: A, B, C. Na A verzet de ander zich en volgt keuze 2 (A2, B2, C2):
 // volhouden, opgeven of alsnog boos worden. Op het scherm heten ze gewoon weer A, B en C.
 const STAGE_KEYS = { 1: ['A', 'B', 'C'], 2: ['A2', 'B2', 'C2'] };
+// Volgorde op het scherm. De sleutels (A = rustig, B = ontwijken, C = boos) zijn intern; stonden ze
+// overal in die volgorde, dan leert de speler 'kies de eerste' in plaats van de zinnen te lezen.
+// Daarom geeft elk scenario per keuzemoment een eigen, vaste volgorde (choiceOrder). Vast en niet
+// willekeurig: in de klas ziet iedereen hetzelfde, dus 'ik koos B' betekent voor iedereen hetzelfde.
+// De letter op de kaart (en toets 1-2-3 / A-B-C) hoort bij de plek, niet bij de sleutel.
+const stageOrder = (stage) => {
+  const o = scn?.choiceOrder?.[stage];
+  return o && o.length === 3 && STAGE_KEYS[stage].every((k) => o.includes(k)) ? o : STAGE_KEYS[stage];
+};
 const hasStage2 = () => !!T.CHOICES.A2;
 const stageOf = (key) => (key && key.endsWith('2') ? 2 : 1);
 // Alle afloopkaarten: B en C, en na A de drie uitkomsten van keuze 2.
@@ -621,8 +630,8 @@ function renderChoice() {
   list.replaceChildren();
   const items = [];
   const listenNl = pair(UI.listen, S.lang)[0];
-  for (const key of STAGE_KEYS[stage]) {
-    const letter = key[0];
+  for (const [pos, key] of stageOrder(stage).entries()) {
+    const letter = 'ABC'[pos];
     const tried = triedOpt(key);
     // Kort in het Nederlands (met pictogram-chips), de vertaling wel van de hele zin.
     const short = T.CHOICE_SHORT?.[key];
@@ -1320,7 +1329,7 @@ function bindUI() {
     }
     if (S.phase !== 'choice') return;
     const i = { 1: 0, 2: 1, 3: 2, a: 0, b: 1, c: 2 }[e.key.toLowerCase()];
-    if (i !== undefined) pick(STAGE_KEYS[S.stage || 1][i]);
+    if (i !== undefined) pick(stageOrder(S.stage || 1)[i]);
   });
 
   // Rondkijken door te slepen (muis, touch, pen).
@@ -1360,7 +1369,10 @@ async function checkVR() {
   }
   btn.disabled = !ok;
   if (!ok) btn.title = pair(T.UI.noVr, 'nl')[0];
-  $('#vr-note').hidden = ok;
+  // Op een telefoon of tablet zonder VR is een grijze knop met uitleg alleen maar extra leeswerk:
+  // daar verdwijnen knop en uitleg. Op een laptop of digibord blijft de uitleg staan (voor de docent).
+  btn.hidden = !ok && LOW_END;
+  $('#vr-note').hidden = ok || LOW_END;
 }
 
 // ------------------------------------------------------------------
@@ -1538,7 +1550,6 @@ function loop() {
 // Prestaties (tablet, VR): kleine voorwerpen (kopjes, bestek, flesjes, borden, etiketten)
 // werpen geen schaduw; hun schaduw is onzichtbaar klein maar kost elk een extra draw call in de
 // schaduwpass. Op telefoon/tablet en in VR een kleinere, goedkopere schaduwkaart.
-const LOW_END = /Android|iPhone|iPad|Mobile|Quest|OculusBrowser/i.test(navigator.userAgent || '');
 function lightenShadows() {
   let culled = 0;
   const box = new THREE.Box3();
@@ -1574,6 +1585,7 @@ function lightenShadows() {
 // ------------------------------------------------------------------
 // scenario: {
 //   texts: { UI, LINES, CHOICES, OUTCOMES }, choiceIcon, subColors, lineEmo,
+//   choiceOrder: { 1: ['B', 'A', 'C'], 2: [...] }: volgorde van de antwoorden op het scherm,
 //   lipsync: url, audioDir: map met stemopnames, eye: ooghoogte (m), seatedVR: speler zit,
 //   person(who), build(), reset(state: 'start' | 'choice' | 'choice2'), intro(id),
 //   onChoice(stage), branch(id, key): geeft 'choice2' terug als er een tweede keuze volgt,
@@ -1585,12 +1597,23 @@ export async function start(scenario) {
   eye = scenario.eye ?? 1.65;
   camera.position.set(0, eye, 0);
   window.__sim = Object.defineProperties(
-    { S, pick, goChoice, skipIntro, restart, retry, retryStart, stepCard, previewChoice, rig, camera, look, vrui, showReflection, readCard, stopReading },
+    { S, pick, goChoice, skipIntro, restart, retry, retryStart, stepCard, previewChoice, rig, camera, look, vrui, showReflection, readCard, stopReading, renderer, scene },
     { simT: { get: () => simT }, ...Object.getOwnPropertyDescriptors(scenario.debug || {}) },
   );
 
   bindUI();
   onResize();
+  // Voortgang op de startknop: de personages zijn het grootste deel (70%), daarna de stemopnames.
+  const startBtn = $('#btn-start');
+  const load = { frac: 0, aDone: 0, aTotal: 0 };
+  const showLoad = () => {
+    const m = LOADING.total ? LOADING.done / LOADING.total : 0;
+    const a = load.aTotal ? load.aDone / load.aTotal : 0;
+    load.frac = Math.max(load.frac, 0.7 * m + 0.3 * a); // nooit terug, ook als er nog iemand bijkomt
+    startBtn.style.setProperty('--load', load.frac.toFixed(3));
+    startBtn.setAttribute('aria-valuenow', Math.round(load.frac * 100));
+  };
+  LOADING.onChange = showLoad;
   const fontsReady = document.fonts
     ? Promise.race([
         Promise.all([
@@ -1619,9 +1642,18 @@ export async function start(scenario) {
     .then((g) => (audio.gains = g || {}))
     .catch(() => (audio.gains = {}));
   const voiceIds = [...Object.keys(T.LINES), ...Object.keys(T.CHOICES).map((k) => `p${k}`)];
-  audioPrefetch = Promise.all([gains, ...voiceIds.map((id) => audio.prefetch(id, `${scenario.audioDir}${id}.mp3`))]);
+  load.aTotal = voiceIds.length;
+  const fetchVoice = (id) =>
+    audio.prefetch(id, `${scenario.audioDir}${id}.mp3`).then((ok) => {
+      load.aDone++;
+      showLoad();
+      return ok;
+    });
+  audioPrefetch = Promise.all([gains, ...voiceIds.map(fetchVoice)]);
   await audioPrefetch;
-  const btn = $('#btn-start');
+  LOADING.onChange = null;
+  const btn = startBtn;
+  btn.removeAttribute('aria-valuenow');
   btn.disabled = false;
   btn.classList.remove('is-loading');
   document.body.classList.add('ready');

@@ -43,6 +43,12 @@ rustig blijven en je punt herhalen als de ander niet meteen luistert.
   hooguit ~6 LU in plaats van 15-18 LU. Draai het script opnieuw na een nieuwe opname.
 - **Pictogrammen bij de antwoorden** beschrijven wát je zegt (gevaar, haast, stop …), niet of het
   goed is: geen hartje bij het 'goede' en geen boos gezicht bij het 'foute' antwoord.
+- **Volgorde van de antwoorden:** het rustige antwoord staat niet altijd vooraan. Elke oefening heeft
+  per keuzemoment een eigen, vaste volgorde (`choiceOrder` in `js/main.js`, `js/kantine.js` en
+  `js/henk.js`), zodat 'kies altijd de eerste' niet werkt en je de zinnen moet lezen of beluisteren.
+  De volgorde is vast en niet willekeurig: in de klas ziet iedereen hetzelfde. De letter op de kaart
+  (A, B, C; toetsen 1-2-3) hoort bij de plek op het scherm. In deze README en in de code zijn A, B
+  en C de *interne* namen: A = rustig, B = ontwijken of meegaan, C = boos.
 - **Apparaten:** laptop/pc, tablet/telefoon (slepen om rond te kijken), digibord
   (grote knoppen, toetsen 1-2-3) en VR-bril via WebXR.
 
@@ -263,6 +269,9 @@ Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten
   stellingen voor dozen en bakken met liggers op 0,5 – 0,95 – 2,15 – 3,3 m, draadroosters,
   locatie-etiketten (12-04-C), gangbord, gele lijnen, een rolsteiger met treden en leuningen en
   Henks orderkar. Door een opening in de overkant van de gang zie je de hoofdgang en de docks.
+- **Omkijken:** zodra Henk omkijkt en praat, laat hij met rechts los en houdt hij zich alleen met
+  links aan de staander vast (`freeRight` in `js/henk.js`). Zijn romp draait dan naar de speler; een
+  rechterhand op de ligger zou dwars door zijn eigen lichaam reiken en de arm verdween in zijn hesje.
 - **Henk:** Rocketbox `Male_Adult_05` (gezichtsvariant met blendshapes, texturen `m009_*`), met
   grijzend haar (haar en haarplukjes zijn grijs gemaakt) en een geel hesje met reflecterende
   strepen in plaats van de beige bodywarmer. De haarplukjes langs de haargrens zijn een apart
@@ -310,6 +319,7 @@ Nabespreking ── dezelfde 4 kaartjes als in de andere oefeningen. Geen punten
 | Teksten, vertalingen en nabespreking (Hoog en droog) | `js/i18n-henk.js` |
 | Namen van de oefeningen (titel en links op het startscherm) | `EXERCISES` in `js/i18n.js` |
 | Pictogrammen | `js/icons.js` |
+| Volgorde van de antwoorden op het scherm | `choiceOrder` in `js/main.js`, `js/kantine.js`, `js/henk.js` |
 | Luidheid van de stemopnames (gain per regel) | `tools/loudness.py` → `audio/**/gain.json` |
 | Hoe sterk gezicht en gebaren zijn (0 = neutraal, 1 = vol) | `EXPRESSION` in `js/human.js` |
 | Volgorde, timing en gebaren per zin | `js/main.js`, `js/kantine.js` en `js/henk.js` (`runIntro`, `branchA/B/C`) |
@@ -368,6 +378,12 @@ Zonder lipsync-tijdlijn werkt een zin ook: dan beweegt de mond alleen op het vol
 
 Three.js 0.160 (via jsDelivr), Web Audio API (HRTF-panning, convolutiegalm,
 analyser voor lipsync), WebXR. Geen buildstap: gewone ES-modules.
+
+**Laden en geheugen.** Tijdens het laden loopt er een balk onderin de startknop (personages 70%,
+stemopnames 30%). De gezichtstexturen zijn 2048 × 2048; op telefoon, tablet (ook iPad) en VR-bril en
+voor mensen die alleen op de achtergrond staan (`texMax: 1024` bij `Human.load`) worden ze bij het
+laden verkleind naar 1024 × 1024. Dat scheelt per persoon ongeveer driekwart van het videogeheugen.
+Een oefening tekent ongeveer 260 voorwerpen en 80.000 driehoeken per beeld.
 
 De personages (Marco, Sandra, Dennis, Tomasz, Henk en de collega's op de achtergrond) en hun animaties komen uit
 [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) (MIT-licentie, zie

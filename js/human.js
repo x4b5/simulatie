@@ -212,9 +212,34 @@ const POSE_CLIPS = {
   firm: ['talkFirm', 'talkAngry'],
 };
 
+// Telefoon, tablet of VR-bril: minder videogeheugen en een zwakkere chip. iPadOS meldt zich als
+// 'Macintosh'; die herkennen we aan het aanraakscherm.
+const UA = navigator.userAgent || '';
+export const LOW_END = /Android|iPhone|iPad|Mobile|Quest|OculusBrowser/i.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+// Grootste zijde van een textuur. De gezichten zijn 2048 × 2048 (kleur + reliëf: ~45 MB videogeheugen
+// per persoon). Op telefoon, tablet en VR-bril, en voor mensen die alleen op de achtergrond staan,
+// is 1024 genoeg: een kwart van het geheugen, en op dat scherm of die afstand niet te zien.
+export const TEX_MAX = LOW_END ? 1024 : 2048;
+
+// Voortgang van het laden van de personages (voor de balk op de startknop, zie start() in sim.js).
+export const LOADING = { total: 0, done: 0, onChange: null };
+
 const texLoader = new THREE.TextureLoader();
-function tex(url, srgb) {
-  const t = texLoader.load(url);
+function tex(url, srgb, max = TEX_MAX) {
+  const t = texLoader.load(url, (t) => {
+    const im = t.image;
+    const big = im ? Math.max(im.width, im.height) : 0;
+    if (!big || big <= max) return;
+    // Verkleinen vóór de eerste keer tekenen: alleen de kleine versie gaat naar de videokaart.
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round((im.width * max) / big));
+    c.height = Math.max(1, Math.round((im.height * max) / big));
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(im, 0, 0, c.width, c.height);
+    t.image = c;
+    t.needsUpdate = true;
+  });
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   t.anisotropy = 4;
   return t;
@@ -372,15 +397,21 @@ export class Human {
   // Optioneel: bodyCode = andere textuurset voor kleding en handen (bijv. 'm108k': zonder hesje en
   // handschoenen), hideUV = rechthoeken [u0, y0, u1, y1] in textuurcoördinaten (y van boven) waarvan
   // de lichaamsdriehoeken verborgen worden (losse onderdelen zoals een portofoon).
-  static async load({ model, code, anims, facial = true, badge = null, bodyCode = null, hideUV = null }) {
+  // texMax: grootste zijde van de texturen (1024 voor wie alleen op de achtergrond staat).
+  static async load({ model, code, anims, facial = true, badge = null, bodyCode = null, hideUV = null, texMax = TEX_MAX }) {
     const manager = new THREE.LoadingManager();
     // Texturen uit het FBX-bestand negeren: we zetten zelf PBR-materialen.
     manager.setURLModifier((u) => (/\.tga$/i.test(u) ? 'data:,' : u));
+    LOADING.total++;
+    LOADING.onChange?.();
     const [obj, ...sets] = await Promise.all([new FBXLoader(manager).loadAsync(model), ...[].concat(anims).map(loadAnimSet)]);
-    return new Human(obj, Object.assign({}, ...sets), { code, facial, badge, bodyCode, hideUV });
+    LOADING.done++;
+    LOADING.onChange?.();
+    return new Human(obj, Object.assign({}, ...sets), { code, facial, badge, bodyCode, hideUV, texMax });
   }
 
-  constructor(obj, clips, { code, facial, bodyCode, hideUV }) {
+  constructor(obj, clips, { code, facial, bodyCode, hideUV, texMax = TEX_MAX }) {
+    const max = Math.min(texMax, TEX_MAX);
     this.root = new THREE.Group();
     this.model = obj;
     obj.scale.setScalar(0.01);
@@ -402,7 +433,7 @@ export class Human {
             // Alpha-to-coverage geeft met anti-aliasing zachte randen zonder sorteerproblemen.
             return new THREE.MeshStandardMaterial({
               name: m.name,
-              map: tex(`${dir}${code}_opacity_color.png`, true),
+              map: tex(`${dir}${code}_opacity_color.png`, true, max),
               alphaTest: 0.4,
               alphaToCoverage: true,
               side: THREE.DoubleSide,
@@ -413,8 +444,8 @@ export class Human {
           }
           const common = {
             name: m.name,
-            map: tex(`${dir}${(part === 'body' && bodyCode) || code}_${part}_color.jpg`, true),
-            normalMap: tex(`${dir}${(part === 'body' && bodyCode) || code}_${part}_normal.jpg`, false),
+            map: tex(`${dir}${(part === 'body' && bodyCode) || code}_${part}_color.jpg`, true, max),
+            normalMap: tex(`${dir}${(part === 'body' && bodyCode) || code}_${part}_normal.jpg`, false, max),
             metalness: 0,
           };
           // Huid: zachte, warme glans aan de randen (sheen) geeft een minder plastic gezicht.

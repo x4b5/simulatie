@@ -59,7 +59,7 @@ async function makeCast() {
     load('models/collega2.fbx', 'm102'),
     load('models/collega4.fbx', 'm103'),
     load('models/collega5.fbx', 'm104'),
-    load('models/sandra.fbx', 'f101', 'models/anim_f', lunch('f101k')),
+    load('models/sandra.fbx', 'f101', 'models/anim_f', { ...lunch('f101k'), texMax: 1024 }), // op de achtergrond
   ]);
   cast = [marco, dennis, tomasz, bg1, bg2, bg3, sandra];
   // Tomasz in een donkergroen werkjack: zo is hij te onderscheiden van de collega's in het blauw.
@@ -1024,6 +1024,7 @@ function update(dt, wdt) {
 start({
   texts: { UI, LINES, CHOICES, OUTCOMES },
   choiceIcon: CANTEEN_CHOICE_ICON,
+  choiceOrder: { 1: ['C', 'B', 'A'], 2: ['B2', 'A2', 'C2'] },
   subColors: { marco: '#f2c500', dennis: '#ff8a3d', tomasz: '#7cc4ff', you: '#5fd48b' },
   lineEmo: LINE_EMO,
   lipsync: 'models/lipsync_kantine.json',

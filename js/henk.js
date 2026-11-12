@@ -94,7 +94,7 @@ async function makeCast() {
     Human.load({ model: 'models/marco.fbx', code: 'm108', anims: 'models/anim_m' }),
     Human.load({ model: 'models/sandra.fbx', code: 'f101', anims: 'models/anim_f' }),
     Human.load({ model: 'models/collega2.fbx', code: 'm102', anims: 'models/anim_m' }),
-    Human.load({ model: 'models/collega3.fbx', code: 'm105', anims: 'models/anim_m' }),
+    Human.load({ model: 'models/collega3.fbx', code: 'm105', anims: 'models/anim_m', texMax: 1024 }), // alleen in de verte
     PlayerArms.load(scene),
   ]);
   arms = playerArms;
@@ -226,6 +226,14 @@ function postHold(side, y) {
 // Rechts van de doos en de doos eronder (x > 0,08), anders zitten de vingers in het karton.
 const beamHold = (x, lv) => contact(null, V3(x, lv - 0.03, RACK - SKIN), AX.y, AX.z, { curl: [1.35, -0.1, 0.05], thumb: 0.2, pole: [0.35, -0.45, -1] });
 const BEAM_X = HX + 0.06;
+// Omkijken en praten: Henk laat met rechts los en houdt zich alleen met links aan de staander vast.
+// Zijn romp draait dan naar de speler (torsoFollow); een rechterhand op de ligger zou dwars door
+// zijn eigen romp moeten reiken en de arm verdwijnt in zijn hesje. Los hangt de arm aan de gangkant,
+// vanaf de speler helemaal te zien. instant: bij het terugzetten naar de keuze (de tijd staat stil).
+function freeRight(instant = false) {
+  holds.set('r', null);
+  if (instant) henk.grip('r', null, { instant: true });
+}
 
 // ------------------------------------------------------------------
 // De doos
@@ -722,7 +730,7 @@ function resetScene(state) {
     snapLook();
   } else if (state === 'choice' || state === 'choice2') {
     rig.position.copy(P.stop);
-    holds.set('r', beamHold(BEAM_X, LV[2]));
+    freeRight(true);
     climb.goal.z = TALK_Z;
     henk.root.position.z = TALK_Z;
     henk.lookTarget = playerHead;
@@ -784,12 +792,12 @@ async function runIntro(id) {
   lookAtFn(faceOf(henk, 0.25), 1.6);
   await wait(2.2);
   guard(id);
-  // Henk merkt de speler op en kijkt om; zijn rechterhand gaat naar de ligger.
+  // Henk merkt de speler op en kijkt om; zijn rechterhand laat de doos los (zie freeRight).
   tugging = false;
   henk.lookTarget = playerHead;
   henk.surprise = 0.2;
   henk.torsoFollow = 0.55;
-  holds.set('r', beamHold(BEAM_X, LV[2]), 0.7, { out: 0.04, over: 0.4 });
+  freeRight();
   glide(climb.goal, V3(HX, climb.goal.y, TALK_Z), 0.9);
   await wait(0.9);
   guard(id);
@@ -874,7 +882,7 @@ async function branchA(id) {
       holds.set('r', tugHold(), 0.55, { out: 0.03, over: 0.4 });
     }],
     [1.85, () => (henk.lookTarget = playerHead)],
-    [2.25, () => holds.set('r', beamHold(BEAM_X, LV[2]), 0.55, { out: 0.03, over: 0.4 })],
+    [2.25, () => freeRight()],
     [2.75, () => henk.nod(0.4)], // "Dan zijn we zo klaar."
   ]);
   henk.mood = { smile: 0.2, sarcasm: 0.25 };
@@ -1316,7 +1324,6 @@ async function branchC(id, key = 'C') {
     [2.55, () => henk.jab('r', henk.root.localToWorld(new THREE.Vector3(-0.7, 1.6, 0.25)), 0.75, 0.6)],
   ]);
   henk.setHands('angry');
-  holds.set('r', beamHold(BEAM_X, LV[2]), 0.6, { out: 0.04, over: 0.4 });
   // Sandra komt eraan. De speler stapt achteruit het midden van de gang in, naar haar toe.
   sandra.lookTarget = henkHead;
   lookAtFn(faceOf(sandra, 0.1), 1.8);
@@ -1435,6 +1442,7 @@ function update(dt, wdt) {
 start({
   texts: { UI, LINES, CHOICES, OUTCOMES, CHOICE_SHORT, CARD_PICS },
   choiceIcon: HENK_CHOICE_ICON,
+  choiceOrder: { 1: ['A', 'C', 'B'], 2: ['C2', 'B2', 'A2'] },
   previewRate: { A: 0.9 }, // de lange zin bij 'Luister' iets rustiger
   subColors: { henk: '#7cc4ff', marco: '#f2c500', sandra: '#ff8a3d', you: '#5fd48b' },
   lineEmo: LINE_EMO,

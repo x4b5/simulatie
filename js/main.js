@@ -77,14 +77,14 @@ async function makeCast() {
   [marco, sandra, npc] = await Promise.all([
     Human.load({ model: 'models/marco.fbx', code: 'm108', anims: 'models/anim_m' }),
     Human.load({ model: 'models/sandra.fbx', code: 'f101', anims: 'models/anim_f' }),
-    Human.load({ model: 'models/collega.fbx', code: 'm107', anims: 'models/anim_m' }),
+    Human.load({ model: 'models/collega.fbx', code: 'm107', anims: 'models/anim_m', texMax: 1024 }), // alleen in de verte
   ]);
   scene.add(marco.root, sandra.root, npc.root);
 
   // Meer leven in de hal: een orderpicker bij de stelling en een collega bij de docks.
   [npc2, npc3] = await Promise.all([
     Human.load({ model: 'models/collega2.fbx', code: 'm102', anims: 'models/anim_m' }),
-    Human.load({ model: 'models/collega3.fbx', code: 'm105', anims: 'models/anim_m' }),
+    Human.load({ model: 'models/collega3.fbx', code: 'm105', anims: 'models/anim_m', texMax: 1024 }),
   ]);
   npc2.root.position.set(-6.75, 0, -12.2);
   npc2.root.rotation.y = -Math.PI / 2;
@@ -840,6 +840,7 @@ function update(dt, wdt) {
 start({
   texts: { UI, LINES, CHOICES, OUTCOMES },
   choiceIcon: CHOICE_ICON,
+  choiceOrder: { 1: ['B', 'A', 'C'], 2: ['A2', 'C2', 'B2'] },
   subColors: { marco: '#f2c500', sandra: '#ff8a3d', you: '#5fd48b' },
   lineEmo: LINE_EMO,
   lipsync: 'models/lipsync.json',
